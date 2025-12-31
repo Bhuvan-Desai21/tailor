@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tailor</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        h1 {
+            margin: 0 0 1rem;
+            font-size: 2rem;
+        }
+
+        button {
+            background: #4a5568;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0.5rem;
+        }
+
+        button:hover {
+            background: #5a6578;
+        }
+
+        #status {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #2d2d2d;
+            border-radius: 4px;
+            min-height: 3rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Tailor</h1>
+        <button id="openVault">Open Vault</button>
+        <div id="status">Ready</div>
+    </div>
+
+    <script type="module">
+        import { invoke } from '@tauri-apps/api/core';
+        import { open } from '@tauri-apps/plugin-dialog';
+
+        const status = document.getElementById('status');
+
+        document.getElementById('openVault').addEventListener('click', async () => {
+            try {
+                const selected = await open({
+                    directory: true,
+                    multiple: false,
+                });
+
+                if (selected) {
+                    status.textContent = 'Opening vault...';
+                    const result = await invoke('open_vault', { vaultPath: selected });
+                    status.textContent = `Opened: ${result.window_label} (Port: ${result.ws_port})`;
+                }
+            } catch (error) {
+                status.textContent = `Error: ${error}`;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+
+</html>
