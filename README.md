@@ -69,13 +69,14 @@ tailor/
 │   │   ├── main.rs               # Entry point
 │   │   ├── window_manager.rs    # Window lifecycle
 │   │   ├── sidecar_manager.rs   # Process orchestration
-│   │   ├── dependency_checker.rs # Auto pip install
+│   │   ├── dependency_checker.rs # Auto install dependencies
 │   │   ├── ipc_router.rs        # Command routing
 │   │   └── event_bus.rs         # Event routing
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── sidecar/                      # Python sidecar (✨ refactored)
-│   ├── main.py                   # Entry point with CLI
+│   ├── __main__.py               # Module entry point
+│   ├── main.py                   # CLI logic
 │   ├── websocket_server.py       # JSON-RPC 2.0 WebSocket server
 │   ├── vault_brain.py            # Plugin orchestrator
 │   ├── event_emitter.py          # Event emission API

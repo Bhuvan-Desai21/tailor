@@ -7,6 +7,12 @@
         "beforeDevCommand": "npm run dev",
         "devUrl": "http://localhost:5173"
     },
+    "bundle": {
+        "icon": [
+            "icons/icon.png",
+            "icons/icon.ico"
+        ]
+    },
     "app": {
         "windows": [
             {
