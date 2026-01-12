@@ -34,7 +34,7 @@ sequenceDiagram
 
     Note over U,L: LLM Processing
     P->>P: Validate text not empty
-    P->>L: process(text, system_prompt)
+    P->>L: run(text, system_prompt)
     L-->>P: refined_text
 
     Note over U,L: Update UI
@@ -75,7 +75,7 @@ flowchart TB
     INP -->|"refiner.refine(text)"| WS
     WS -->|"lookup brain.commands"| VB
     VB -->|"call handler"| HR
-    HR -->|"process()"| LLM
+    HR -->|"run()"| LLM
     LLM -->|"refined text"| HR
     HR -->|"UI_COMMAND: set_input"| HE
     HE -->|"set value"| INP
@@ -127,7 +127,7 @@ flowchart TB
     
     E --> F{"text empty?"}
     F -->|Yes| G["NOTIFY: 'Please enter text'"]
-    F -->|No| H["llm_pipeline.process()"]
+    F -->|No| H["pipeline.run()"]
     
     H --> I[System Prompt: Refiner Expert]
     H --> J[User Message: Original Text]

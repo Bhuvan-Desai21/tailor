@@ -257,8 +257,14 @@ class WebSocketServer:
         """
         if self.connection:
             try:
-                self.connection.close()
-                logger.debug("Connection closed")
+                # Create a task to close the connection asynchronously
+                try:
+                    loop = asyncio.get_running_loop()
+                    asyncio.create_task(self.connection.close())
+                except RuntimeError:
+                    # No running loop, connection will be closed when event loop ends
+                    pass
+                logger.debug("Connection close initiated")
             except Exception as e:
                 logger.exception(f"Close error: {e}")
 

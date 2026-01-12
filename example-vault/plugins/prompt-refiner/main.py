@@ -133,7 +133,7 @@ class Plugin(PluginBase):
         self.logger.info(f"Refining prompt: {original_text[:50]}...")
         
         # Check if LLM pipeline is available
-        if not self.brain or not self.brain.llm_pipeline:
+        if not self.brain or not self.brain.pipeline:
             self.notify(
                 "LLM not available. Please check your API key configuration.",
                 severity=Severity.ERROR
@@ -146,18 +146,16 @@ class Plugin(PluginBase):
         
         try:
             # Call LLM with refiner system prompt
-            result = await self.brain.llm_pipeline.process(
-                message=original_text,
-                history=[],
-                metadata={
-                    "plugin": self.name,
-                    "system_prompt": REFINER_SYSTEM_PROMPT,
-                    "temperature": 0.3  # Lower temperature for more predictable refinement
-                }
+            # Prepend system context to the message for refinement
+            refine_prompt = f"{REFINER_SYSTEM_PROMPT}\n\nUser prompt to refine:\n{original_text}"
+            
+            ctx = await self.brain.pipeline.run(
+                message=refine_prompt,
+                history=[]
             )
             
-            if result.get("status") == "success":
-                refined_text = result.get("response", original_text)
+            if ctx.response:
+                refined_text = ctx.response.strip()
                 
                 # Send refined text back to frontend to update input
                 self.brain.emit_to_frontend(
@@ -178,7 +176,7 @@ class Plugin(PluginBase):
                     "refined": refined_text
                 }
             else:
-                error_msg = result.get("error", "Unknown error during refinement")
+                error_msg = "Empty response from LLM"
                 self.notify(f"Refinement failed: {error_msg}", severity=Severity.ERROR)
                 return {
                     "status": "error",
