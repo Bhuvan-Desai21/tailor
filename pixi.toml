@@ -32,6 +32,8 @@ pkg-config = ">=0.29.2,<0.30"
 openssl = ">=3.2.1,<4"
 pillow = ">=12.1.0,<13"
 pydantic = ">=2.12.5,<3"
+litellm = ">=1.73.6,<2"
+langchain-community = ">=0.3.31,<0.4"
 
 [pypi-dependencies]
 langgraph-cli = ">=0.4.11, <0.5"

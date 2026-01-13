@@ -162,6 +162,37 @@ class TestVaultBrain:
         await brain._tick_plugins()
         mock_plugin.on_tick.assert_called_once()
 
+    @patch("sidecar.vault_brain.ChatLiteLLM")
+    @pytest.mark.asyncio
+    async def test_litellm_completion_command(self, mock_chat_cls, valid_vault, mock_ws_server):
+        """Test the litellm.completion command."""
+        brain = VaultBrain(valid_vault, mock_ws_server)
+        await brain.initialize()
+        
+        # Mock ChatLiteLLM instance and response
+        mock_chat_instance = Mock()
+        mock_response = Mock()
+        mock_response.content = "Test response"
+        mock_response.response_metadata = {"token_usage": {"total_tokens": 10}}
+        mock_chat_instance.ainvoke = AsyncMock(return_value=mock_response)
+        mock_chat_cls.return_value = mock_chat_instance
+        
+        # Execute command
+        result = await brain.execute_command(
+            "litellm.completion", 
+            messages=[{"role": "user", "content": "Hello"}],
+            model="gpt-4"
+        )
+        
+        assert result["status"] == "success"
+        assert result["content"] == "Test response"
+        assert result["model"] == "gpt-4"
+        assert result["usage"]["total_tokens"] == 10
+        
+        # Verify call
+        mock_chat_cls.assert_called_with(model="gpt-4")
+        mock_chat_instance.ainvoke.assert_called_once()
+
 
 @pytest.mark.unit
 class TestCommandRegistry:
@@ -182,6 +213,7 @@ class TestCommandRegistry:
         (vault_path / ".vault.json").write_text("{}")
         
         ws_server = Mock()
+        ws_server.command_handlers = {}
         brain = VaultBrain(vault_path, ws_server)
         # We don't necessarily need full initialize for registry unit tests if we just use register_command directly
         return brain

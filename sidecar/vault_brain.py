@@ -21,6 +21,8 @@ from . import exceptions
 
 from .pipeline import PipelineManager, DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
+from langchain_community.chat_models import ChatLiteLLM
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 
 # Local import avoids circular dependency in type checking if used carefully
 # from .api.plugin_base import PluginBase
@@ -391,7 +393,38 @@ class VaultBrain:
         # Let's keep these as standard commands.
         self.register_command("system.chat", handle_chat, constants.CORE_PLUGIN_NAME)
         self.register_command("system.list_commands", list_commands, constants.CORE_PLUGIN_NAME)
+        self.register_command("system.list_commands", list_commands, constants.CORE_PLUGIN_NAME)
         self.register_command("system.info", get_info, constants.CORE_PLUGIN_NAME)
+
+        # Litellm Completion Command
+        async def handle_litellm_completion(messages: List[Dict[str, str]], model: str = "gpt-3.5-turbo", **kwargs) -> Dict[str, Any]:
+            try:
+                # Convert dict messages to LangChain messages
+                lc_messages: List[BaseMessage] = []
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role == "system":
+                        lc_messages.append(SystemMessage(content=content))
+                    elif role == "assistant":
+                        lc_messages.append(AIMessage(content=content))
+                    else:
+                        lc_messages.append(HumanMessage(content=content))
+
+                chat = ChatLiteLLM(model=model, **kwargs)
+                response = await chat.ainvoke(lc_messages)
+                
+                return {
+                    "content": str(response.content),
+                    "usage": response.response_metadata.get("token_usage", {}),
+                    "model": model,
+                    "status": "success"
+                }
+            except Exception as e:
+                logger.error(f"Litellm error: {e}")
+                return {"status": "error", "error": str(e)}
+
+        self.register_command("litellm.completion", handle_litellm_completion, constants.CORE_PLUGIN_NAME)
 
         # Connect WebSocket handlers
         
