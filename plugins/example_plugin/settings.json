@@ -1,5 +1,0 @@
-{
-    "enabled": true,
-    "heartbeat_interval": 3,
-    "log_level": "info"
-}

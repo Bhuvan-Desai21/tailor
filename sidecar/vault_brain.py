@@ -441,6 +441,8 @@ class VaultBrain:
             self.ws_server.register_handler("plugins.update", self.update_plugin)
             self.ws_server.register_handler("plugins.uninstall", self.uninstall_plugin)
             self.ws_server.register_handler("plugins.list", self.list_plugins)
+            self.ws_server.register_handler("plugins.toggle", self.toggle_plugin)
+            self.ws_server.register_handler("system.restart_vault", self.restart_vault)
 
     # =========================================================================
     # Core Command Implementations
@@ -570,13 +572,129 @@ class VaultBrain:
     
     @command("plugins.list", constants.CORE_PLUGIN_NAME)
     async def list_plugins(self, **kwargs) -> Dict[str, Any]:
-        # Ignores args anyway
+        """List installed plugins with their enabled state from .vault.json."""
         plugins = self.plugin_installer.list_installed()
+        
+        # Enrich with enabled state from config
+        plugins_config = self.config.get("plugins", {})
+        for plugin in plugins:
+            plugin_id = plugin.get("id", "")
+            plugin_conf = plugins_config.get(plugin_id, {})
+            if isinstance(plugin_conf, dict):
+                plugin["enabled"] = plugin_conf.get("enabled", False)
+            else:
+                plugin["enabled"] = False
+        
         return {
             "status": "success",
             "plugins": plugins,
             "count": len(plugins)
         }
+    
+    @command("plugins.toggle", constants.CORE_PLUGIN_NAME)
+    async def toggle_plugin(self, plugin_id: str = "", enabled: bool = True, **kwargs) -> Dict[str, Any]:
+        """Toggle plugin enabled state in .vault.json."""
+        # Handle nested params
+        if not plugin_id:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                plugin_id = p.get("plugin_id", plugin_id)
+                enabled = p.get("enabled", enabled)
+        
+        if not plugin_id:
+            return {"status": "error", "error": "plugin_id is required"}
+        
+        try:
+            # Read current config
+            config_path = utils.get_vault_config_path(self.vault_path)
+            config = self._load_config()
+            
+            # Ensure plugins dict exists
+            if "plugins" not in config:
+                config["plugins"] = {}
+            
+            # Ensure plugin entry exists
+            if plugin_id not in config["plugins"]:
+                config["plugins"][plugin_id] = {}
+            
+            # Update enabled state
+            if isinstance(config["plugins"][plugin_id], dict):
+                config["plugins"][plugin_id]["enabled"] = enabled
+            else:
+                config["plugins"][plugin_id] = {"enabled": enabled}
+            
+            # Write back
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+            
+            # Update in-memory config
+            self.config = config
+            
+            logger.info(f"Plugin '{plugin_id}' {'enabled' if enabled else 'disabled'}")
+            
+            return {
+                "status": "success",
+                "plugin_id": plugin_id,
+                "enabled": enabled,
+                "message": f"Plugin '{plugin_id}' {'enabled' if enabled else 'disabled'}. Restart vault to apply."
+            }
+        except Exception as e:
+            logger.exception(f"Failed to toggle plugin: {e}")
+            return {"status": "error", "error": str(e)}
+    
+    @command("system.restart_vault", constants.CORE_PLUGIN_NAME)
+    async def restart_vault(self, **kwargs) -> Dict[str, Any]:
+        """
+        Hot-reload the vault: unload all plugins, reload config, reload plugins.
+        This allows plugin changes to take effect without restarting the app.
+        """
+        logger.info("Restarting vault (hot reload)...")
+        
+        try:
+            # 1. Announce shutdown
+            await self.publish(constants.CoreEvents.SYSTEM_SHUTDOWN)
+            
+            # 2. Unload all plugins (reverse order)
+            for name, plugin in list(self.plugins.items())[::-1]:
+                try:
+                    await plugin.on_unload()
+                    logger.info(f"Unloaded plugin: {name}")
+                except Exception as e:
+                    logger.error(f"Error unloading plugin {name}: {e}")
+            
+            # 3. Clear plugin state
+            self.plugins.clear()
+            self.commands.clear()
+            self.subscribers.clear()
+            
+            # 4. Reload config
+            self.config = self._load_config()
+            
+            # 5. Re-register core commands
+            self._register_core_commands()
+            
+            # 6. Reload plugins
+            self._load_plugins()
+            
+            # 7. Activate plugins
+            await self._activate_plugins()
+            
+            # 8. Re-register decorated handlers
+            self._register_decorated_handlers()
+            
+            # 9. Announce ready
+            await self.publish(constants.CoreEvents.ALL_PLUGINS_LOADED)
+            
+            logger.info(f"Vault restarted: {len(self.plugins)} plugins loaded")
+            
+            return {
+                "status": "success",
+                "message": "Vault restarted successfully",
+                "plugins_loaded": list(self.plugins.keys())
+            }
+        except Exception as e:
+            logger.exception(f"Vault restart failed: {e}")
+            return {"status": "error", "error": str(e)}
 
     @property
     def is_client_connected(self) -> bool:
