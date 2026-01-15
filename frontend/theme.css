@@ -625,3 +625,361 @@ input:focus {
     color: var(--accent-success);
     font-size: 14px;
 }
+
+/* ===== PLUGIN MODAL STYLES ===== */
+
+/* Plugin Store Modal */
+.plugin-store-modal {
+    display: flex;
+    flex-direction: column;
+    height: 500px;
+    max-height: 60vh;
+}
+
+/* Plugin Tabs */
+.plugin-tabs {
+    display: flex;
+    gap: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.plugin-tab {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.plugin-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.plugin-tab.active {
+    background: var(--accent-primary);
+    color: #ffffff;
+}
+
+.plugin-tab i {
+    width: 18px;
+    height: 18px;
+}
+
+/* Plugin Tab Content */
+.plugin-tab-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 300px;
+}
+
+/* Installed Plugins List */
+.installed-plugins-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.plugin-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-lg);
+    background: var(--bg-card);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-subtle);
+    transition: border-color 0.2s;
+}
+
+.plugin-item:hover {
+    border-color: var(--accent-primary);
+}
+
+.plugin-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.plugin-item-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
+}
+
+.plugin-item-header h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.plugin-version {
+    font-size: 12px;
+    color: var(--text-disabled);
+    background: var(--bg-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.plugin-desc {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plugin-item-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex-shrink: 0;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-hover);
+    transition: 0.3s;
+    border-radius: 24px;
+    border: 1px solid var(--border-subtle);
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm);
+}
+
+input:checked+.toggle-slider {
+    background-color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+input:checked+.toggle-slider:before {
+    transform: translateX(20px);
+}
+
+/* Button Icon (for uninstall) */
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius);
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-icon.btn-danger:hover {
+    background: rgba(211, 47, 47, 0.1);
+    border-color: var(--accent-error);
+    color: var(--accent-error);
+}
+
+.btn-icon i {
+    width: 18px;
+    height: 18px;
+}
+
+/* Plugin Store Grid */
+.plugin-store-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.plugin-card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-lg);
+    background: var(--bg-card);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-subtle);
+    transition: all 0.2s;
+}
+
+.plugin-card:hover {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.plugin-card-header {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.plugin-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent-primary), #0d8c6d);
+    border-radius: var(--border-radius);
+    color: white;
+    flex-shrink: 0;
+}
+
+.plugin-icon i {
+    width: 24px;
+    height: 24px;
+}
+
+.plugin-meta {
+    flex: 1;
+    min-width: 0;
+}
+
+.plugin-meta h4 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.plugin-author {
+    font-size: 12px;
+    color: var(--text-disabled);
+}
+
+.plugin-card .plugin-desc {
+    flex: 1;
+    margin-bottom: var(--spacing-md);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.plugin-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.plugin-stats {
+    display: flex;
+    gap: var(--spacing-md);
+    font-size: 12px;
+    color: var(--text-disabled);
+}
+
+.plugin-stats span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.plugin-stats i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Button Sizes */
+.btn-sm {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 13px;
+}
+
+/* Button Success */
+.btn-success {
+    background: var(--accent-success);
+    color: #ffffff;
+    border: none;
+}
+
+.btn-success:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Restart Banner */
+.plugin-restart-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: rgba(245, 124, 0, 0.1);
+    border: 1px solid var(--accent-warning);
+    border-radius: var(--border-radius);
+    margin-top: var(--spacing-lg);
+    color: var(--accent-warning);
+}
+
+.plugin-restart-banner i {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.plugin-restart-banner span {
+    flex: 1;
+    font-weight: var(--font-weight-medium);
+}
+
+.plugin-restart-banner .btn {
+    flex-shrink: 0;
+}
+
+/* Spinning Animation */
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

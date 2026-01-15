@@ -463,18 +463,30 @@ class PluginInstaller:
         """
         plugins = []
         
+        self._logger.debug(f"Listing plugins from: {self.plugins_dir}")
+        
+        if not self.plugins_dir.exists():
+            self._logger.warning(f"Plugins directory does not exist: {self.plugins_dir}")
+            return plugins
+        
         for plugin_dir in self.plugins_dir.iterdir():
             if not plugin_dir.is_dir():
                 continue
             if plugin_dir.name.startswith(".") or plugin_dir.name.startswith("_"):
                 continue
             
+            self._logger.debug(f"Found plugin directory: {plugin_dir.name}")
+            
             # Try to load manifest
             manifest_file = plugin_dir / "plugin.json"
             settings_file = plugin_dir / "settings.json"
             
+            # Default info (always include name, version, description)
             info = {
                 "id": plugin_dir.name,
+                "name": plugin_dir.name.replace("-", " ").replace("_", " ").title(),
+                "version": "1.0.0",
+                "description": "",
                 "path": str(plugin_dir),
                 "enabled": False
             }
@@ -483,23 +495,24 @@ class PluginInstaller:
                 try:
                     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
                     info.update({
-                        "name": manifest.get("displayName", manifest.get("name", plugin_dir.name)),
-                        "version": manifest.get("version", "unknown"),
+                        "name": manifest.get("displayName", manifest.get("name", info["name"])),
+                        "version": manifest.get("version", info["version"]),
                         "description": manifest.get("description", ""),
                         "author": manifest.get("author", {}).get("name", "Unknown")
                     })
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.debug(f"Failed to load manifest for {plugin_dir.name}: {e}")
             
             if settings_file.exists():
                 try:
                     settings = json.loads(settings_file.read_text(encoding="utf-8"))
                     info["enabled"] = settings.get("enabled", False)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self._logger.debug(f"Failed to load settings for {plugin_dir.name}: {e}")
             
             plugins.append(info)
         
+        self._logger.info(f"Found {len(plugins)} installed plugins")
         return plugins
     
     async def _install_dependencies(self, requirements_file: Path) -> bool:

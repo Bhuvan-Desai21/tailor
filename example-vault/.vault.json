@@ -17,6 +17,9 @@
         },
         "prompt_refiner": {
             "enabled": true
+        },
+        "prompt-refiner": {
+            "enabled": true
         }
     }
 }
