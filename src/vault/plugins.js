@@ -2,14 +2,16 @@
  * Plugin Loading & Event Handling Module
  * 
  * Handles loading plugins and processing UI commands from the backend.
+ * Chat is now a core feature, not a plugin.
  */
 
 import { request } from './connection.js';
+import { initChat } from './chat/chat.js';
 
 const log = () => window.log || console.log;
 
 /**
- * Load plugins with retry logic
+ * Load plugins and initialize core chat
  */
 export async function loadPlugins(retryCount = 0) {
     const maxRetries = 3;
@@ -26,7 +28,17 @@ export async function loadPlugins(retryCount = 0) {
         const initDelay = retryCount === 0 ? 1000 : 300;
         await new Promise(resolve => setTimeout(resolve, initDelay));
 
-        // List Commands
+        // Initialize Core Chat (always available, not a plugin)
+        const chatArea = document.getElementById('chat-area');
+        if (chatArea) {
+            logFn('Initializing core chat module', 'info');
+            initChat(chatArea);
+            logFn('Core chat initialized', 'in');
+        } else {
+            logFn('Chat area not found', 'error');
+        }
+
+        // List Commands for plugins
         const res = await request('list_commands');
         logFn(`list_commands response: ${JSON.stringify(res).slice(0, 200)}`, 'in');
 
@@ -34,70 +46,11 @@ export async function loadPlugins(retryCount = 0) {
         const commandList = Object.keys(commands);
         logFn(`Available commands: ${commandList.length}`, 'info');
 
-        // Check for UI commands
-        const hasLLM = commandList.includes('llm.get_ui');
-        logFn(`Has llm.get_ui: ${hasLLM}`, 'info');
-
         // Retry if no commands found
         if (commandList.length === 0 && retryCount < maxRetries) {
             logFn(`No commands found, retrying in ${retryDelay}ms... (attempt ${retryCount + 1}/${maxRetries})`, 'info');
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             return loadPlugins(retryCount + 1);
-        }
-
-        if (hasLLM) {
-            logFn('Loading LLM UI...', 'out');
-            const uiRes = await request('execute_command', {
-                command: 'llm.get_ui',
-                args: {}
-            });
-
-            logFn(`llm.get_ui response: ${JSON.stringify(uiRes).slice(0, 300)}`, 'in');
-
-            // Handle various result structures
-            let html = null;
-            if (uiRes.result?.result?.html) {
-                html = uiRes.result.result.html;
-            } else if (uiRes.result?.html) {
-                html = uiRes.result.html;
-            } else if (uiRes.html) {
-                html = uiRes.html;
-            }
-
-            if (html) {
-                const stage = document.getElementById('chat-area');
-                if (!stage) {
-                    logFn('Chat pane not found', 'error');
-                    return;
-                }
-
-                const range = document.createRange();
-                range.selectNode(stage);
-                const fragment = range.createContextualFragment(`<div class="panel-container" style="height:100%;">${html}</div>`);
-                stage.innerHTML = '';
-                stage.appendChild(fragment);
-
-                if (window.lucide) window.lucide.createIcons();
-                logFn('Loaded LLM UI into Chat Pane', 'in');
-            } else {
-                logFn('No HTML in llm.get_ui response', 'error');
-            }
-        } else if (!hasLLM && retryCount < maxRetries) {
-            logFn(`LLM plugin not found, retrying... (attempt ${retryCount + 1}/${maxRetries})`, 'info');
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-            return loadPlugins(retryCount + 1);
-        } else {
-            // Show default chat UI
-            const stage = document.getElementById('chat-area');
-            if (stage) {
-                stage.innerHTML = `
-                    <div style="text-align:center; padding:40px; color:var(--text-disabled);">
-                        <div style="font-size:2rem; margin-bottom:10px;">💬</div>
-                        <p>LLM plugin not loaded</p>
-                        <p style="font-size:0.8rem;">Enable the LLM plugin in .vault.json</p>
-                    </div>
-                `;
-            }
         }
 
     } catch (e) {

@@ -1,5 +1,10 @@
+"""
+Default Pipeline - LiteLLM Integration
+
+The linear, out-of-the-box pipeline flow using LiteLLM for model agnostic LLM access.
+"""
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 
 from loguru import logger
 from langgraph.graph import StateGraph, END
@@ -13,45 +18,43 @@ except ImportError:
 from .types import PipelineConfig, PipelineContext
 from .nodes import PipelineNodes
 
+# Import LLMService for LiteLLM integration
+try:
+    from ..services.llm_service import LLMService, get_llm_service, LLMResponse
+    LLMSERVICE_AVAILABLE = True
+except ImportError:
+    LLMSERVICE_AVAILABLE = False
+
+
 class DefaultPipeline:
     """
     The linear, out-of-the-box pipeline flow.
     Implemented as a pre-configured LangGraph StateGraph.
     Steps: Input -> Context -> Prompt -> LLM -> PostProcess -> Output
+    
+    Now uses LLMService with LiteLLM for provider-agnostic model access.
     """
     
     def __init__(self, config: PipelineConfig):
         self.config = config
         self._logger = logger.bind(component="DefaultPipeline")
         
-        self._llm: Optional[Any] = None
-        self._init_llm()
+        # LLM Service reference (lazy loaded from singleton)
+        self._llm_service: Optional[LLMService] = None
         
         # Initialize Graph
-        self.nodes = PipelineNodes(self._llm)
+        self.nodes = PipelineNodes(self)  # Pass pipeline as LLM interface
         self.graph = self._build_graph()
 
-    def _init_llm(self):
-        """Initialize LLM client."""
-        # TODO: Move to a unified LLM factory with LiteLLM later
-        if not OPENAI_AVAILABLE:
-            self._logger.warning("OpenAI not available.")
-            return
-
-        api_key = self.config.api_key or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return
-
-        try:
-            self._llm = ChatOpenAI(
-                model=self.config.model,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                api_key=api_key,
-                request_timeout=self.config.timeout
-            )
-        except Exception as e:
-            self._logger.error(f"Failed to init OpenAI: {e}")
+    @property
+    def llm_service(self) -> Optional[LLMService]:
+        """Lazy-load LLMService singleton."""
+        if self._llm_service is None and LLMSERVICE_AVAILABLE:
+            try:
+                self._llm_service = get_llm_service()
+            except RuntimeError:
+                self._logger.debug("LLMService not yet initialized")
+        return self._llm_service
 
     def _build_graph(self):
         """Construct the linear StateGraph."""
@@ -77,9 +80,52 @@ class DefaultPipeline:
         # Compile
         return workflow.compile()
 
-    async def run(self, message: str, history: List[Dict[str, str]] = None) -> PipelineContext:
+    async def complete(
+        self, 
+        messages: List[Dict[str, str]], 
+        category: str = "fast",
+        stream: bool = False,
+        **kwargs
+    ) -> Any:
+        """
+        Generate a completion using LLMService.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            category: Model category to use
+            stream: If True, return async generator
+            **kwargs: Additional parameters
+            
+        Returns:
+            LLMResponse or AsyncGenerator if streaming
+        """
+        if not self.llm_service:
+            self._logger.warning("LLMService not available")
+            return LLMResponse(content="[Error] LLM service not initialized", model="none")
+        
+        return await self.llm_service.complete(
+            messages=messages,
+            category=category,
+            stream=stream,
+            **kwargs
+        )
+
+    async def run(
+        self, 
+        message: str, 
+        history: List[Dict[str, str]] = None,
+        stream: bool = False
+    ) -> PipelineContext:
         """
         Execute the pipeline flow via LangGraph.
+        
+        Args:
+            message: User message
+            history: Conversation history
+            stream: If True, enable streaming mode (stored in metadata)
+            
+        Returns:
+            PipelineContext with response
         """
         # Initialize State
         initial_state = PipelineContext(
@@ -88,12 +134,16 @@ class DefaultPipeline:
             history=history or []
         )
         
+        # Store streaming preference in metadata
+        initial_state.metadata["stream"] = stream
+        initial_state.metadata["category"] = self.config.category
+        
         try:
             self._logger.debug("Invoking LangGraph...")
             # LangGraph invoke returns the final state
             final_state = await self.graph.ainvoke(initial_state)
             
-            # If final_state is a dict (sometimes happens depending on LangGraph version/config), convert back
+            # If final_state is a dict, convert back to PipelineContext
             if isinstance(final_state, dict):
                 return PipelineContext(**final_state)
             
@@ -104,3 +154,38 @@ class DefaultPipeline:
             # Return state with error
             initial_state.response = f"Error: {str(e)}"
             return initial_state
+    
+    async def stream_run(
+        self,
+        message: str,
+        history: List[Dict[str, str]] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Execute the pipeline with streaming response.
+        
+        Yields tokens as they arrive from the LLM.
+        """
+        if not self.llm_service:
+            yield "[Error] LLM service not initialized"
+            return
+        
+        # Build messages list
+        messages = []
+        system_prompt = "You are a helpful assistant."
+        messages.append({"role": "system", "content": system_prompt})
+        
+        for msg in (history or []):
+            messages.append(msg)
+        
+        messages.append({"role": "user", "content": message})
+        
+        try:
+            async for token in await self.llm_service.complete(
+                messages=messages,
+                category=self.config.category,
+                stream=True
+            ):
+                yield token
+        except Exception as e:
+            self._logger.error(f"Stream error: {e}")
+            yield f"[Error] {str(e)}"

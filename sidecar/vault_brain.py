@@ -21,8 +21,8 @@ from .decorators import command, on_event
 
 from .pipeline import DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
-from langchain_community.chat_models import ChatLiteLLM
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
+from .services.keyring_service import get_keyring_service, KeyringService, PROVIDERS
+from .services.llm_service import get_llm_service, LLMService, reset_llm_service
 
 # Local import avoids circular dependency in type checking if used carefully
 # from .api.plugin_base import PluginBase
@@ -100,8 +100,19 @@ class VaultBrain:
         # Load Config
         self.config = self._load_config()
         
-        # Initialize LLM Pipeline with config
+        # Initialize Keyring Service and set API key env vars
+        self._keyring = get_keyring_service()
+        self._keyring.set_env_vars()
+        
+        # Initialize LLM Service
         llm_config = self.config.get("llm", {})
+        self._llm_service = LLMService(self.vault_path, llm_config)
+        
+        # Store as singleton for other components
+        import sidecar.services.llm_service as llm_module
+        llm_module._llm_service = self._llm_service
+        
+        # Initialize Pipeline with config
         pipeline_config = PipelineConfig(**llm_config) if llm_config else PipelineConfig()
         
         # Decide between Default and Graph pipeline
@@ -417,33 +428,229 @@ class VaultBrain:
             "plugins": list(self.plugins.keys())
         }
 
-    @command("litellm.completion", constants.CORE_PLUGIN_NAME)
-    async def handle_litellm_completion(self, messages: List[Dict[str, str]], model: str = "gpt-3.5-turbo", **kwargs) -> Dict[str, Any]:
-        try:
-            # Convert dict messages to LangChain messages
-            lc_messages: List[BaseMessage] = []
-            for msg in messages:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                if role == "system":
-                    lc_messages.append(SystemMessage(content=content))
-                elif role == "assistant":
-                    lc_messages.append(AIMessage(content=content))
-                else:
-                    lc_messages.append(HumanMessage(content=content))
+    # =========================================================================
+    # Settings API Commands
+    # =========================================================================
 
-            chat = ChatLiteLLM(model=model, **kwargs)
-            response = await chat.ainvoke(lc_messages)
+    @command("settings.store_api_key", constants.CORE_PLUGIN_NAME)
+    async def store_api_key(self, provider: str = "", api_key: str = "", **kwargs) -> Dict[str, Any]:
+        """Store an API key in secure OS storage."""
+        # Handle nested params
+        if not provider:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                provider = p.get("provider", provider)
+                api_key = p.get("api_key", api_key)
+        
+        if not provider or not api_key:
+            return {"status": "error", "error": "provider and api_key are required"}
+        
+        if provider not in PROVIDERS:
+            return {"status": "error", "error": f"Unknown provider: {provider}"}
+        
+        success = self._keyring.store_api_key(provider, api_key)
+        
+        if success:
+            # Update environment variable
+            self._keyring.set_env_vars()
+            logger.info(f"Stored API key for {provider}")
+            return {"status": "success", "provider": provider}
+        else:
+            return {"status": "error", "error": "Failed to store API key"}
+
+    @command("settings.delete_api_key", constants.CORE_PLUGIN_NAME)
+    async def delete_api_key(self, provider: str = "", **kwargs) -> Dict[str, Any]:
+        """Delete an API key from secure storage."""
+        if not provider:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                provider = p.get("provider", provider)
+        
+        if not provider:
+            return {"status": "error", "error": "provider is required"}
+        
+        success = self._keyring.delete_api_key(provider)
+        return {
+            "status": "success" if success else "error",
+            "provider": provider
+        }
+
+    @command("settings.list_providers", constants.CORE_PLUGIN_NAME)
+    async def list_providers(self, **kwargs) -> Dict[str, Any]:
+        """List all providers and their configuration status."""
+        return {
+            "status": "success",
+            "providers": self._keyring.get_provider_status()
+        }
+
+    @command("settings.verify_api_key", constants.CORE_PLUGIN_NAME)
+    async def verify_api_key(self, provider: str = "", **kwargs) -> Dict[str, Any]:
+        """Verify an API key by making a test request."""
+        if not provider:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                provider = p.get("provider", provider)
+        
+        if not provider:
+            return {"status": "error", "error": "provider is required"}
+        
+        result = await self._keyring.verify_api_key(provider)
+        return {
+            "status": "success" if result.get("valid") else "error",
+            "provider": provider,
+            **result
+        }
+
+    @command("settings.get_available_models", constants.CORE_PLUGIN_NAME)
+    async def get_available_models(self, **kwargs) -> Dict[str, Any]:
+        """Get all available models based on configured API keys and Ollama."""
+        models = await self._llm_service.get_available_models()
+        
+        # Convert ModelInfo objects to dicts
+        result = {}
+        for provider, model_list in models.items():
+            result[provider] = [
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "categories": m.categories,
+                    "context_window": m.context_window,
+                    "is_local": m.is_local
+                }
+                for m in model_list
+            ]
+        
+        return {
+            "status": "success",
+            "models": result
+        }
+
+    @command("settings.get_model_categories", constants.CORE_PLUGIN_NAME)
+    async def get_model_categories(self, **kwargs) -> Dict[str, Any]:
+        """Get current category configuration and category metadata."""
+        return {
+            "status": "success",
+            "categories_info": self._llm_service.get_categories_info(),
+            "configured": self._llm_service.get_category_config()
+        }
+
+    @command("settings.set_model_category", constants.CORE_PLUGIN_NAME)
+    async def set_model_category(self, category: str = "", model: str = "", **kwargs) -> Dict[str, Any]:
+        """Set the model for a category and save to .vault.json."""
+        # Handle nested params
+        if not category:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                category = p.get("category", category)
+                model = p.get("model", model)
+        
+        if not category or not model:
+            return {"status": "error", "error": "category and model are required"}
+        
+        # Update in-memory
+        self._llm_service.set_category_model(category, model)
+        
+        # Save to config
+        try:
+            config_path = utils.get_vault_config_path(self.vault_path)
+            config = self._load_config()
             
+            if "llm" not in config:
+                config["llm"] = {}
+            if "categories" not in config["llm"]:
+                config["llm"]["categories"] = {}
+            
+            config["llm"]["categories"][category] = model
+            
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+            
+            self.config = config
+            
+            logger.info(f"Set model for category '{category}': {model}")
             return {
-                "content": str(response.content),
-                "usage": response.response_metadata.get("token_usage", {}),
-                "model": model,
-                "status": "success"
+                "status": "success",
+                "category": category,
+                "model": model
             }
         except Exception as e:
-            logger.error(f"Litellm error: {e}")
+            logger.error(f"Failed to save category config: {e}")
             return {"status": "error", "error": str(e)}
+
+    @command("settings.detect_ollama", constants.CORE_PLUGIN_NAME)
+    async def detect_ollama(self, **kwargs) -> Dict[str, Any]:
+        """Detect Ollama and list installed models."""
+        models = await self._llm_service.detect_ollama(force_refresh=True)
+        is_available = await self._llm_service.is_ollama_available()
+        
+        return {
+            "status": "success",
+            "available": is_available,
+            "models": [
+                {
+                    "name": m.name,
+                    "size": m.size,
+                    "categories": self._llm_service._get_ollama_categories(m.name)
+                }
+                for m in models
+            ]
+        }
+
+    # =========================================================================
+    # Chat Commands (Core - replaces LLM plugin)
+    # =========================================================================
+
+    @command("chat.send", constants.CORE_PLUGIN_NAME)
+    async def chat_send(
+        self, 
+        message: str = "", 
+        history: List[Dict[str, str]] = None,
+        category: str = "fast",
+        stream: bool = False,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Send a chat message and get a response."""
+        # Handle nested params
+        if not message:
+            p = kwargs.get("p") or kwargs.get("params")
+            if isinstance(p, dict):
+                message = p.get("message", message)
+                history = p.get("history", history)
+                category = p.get("category", category)
+                stream = p.get("stream", stream)
+        
+        if not message:
+            return {"status": "error", "error": "message is required"}
+        
+        try:
+            # Build messages
+            messages = []
+            for msg in (history or []):
+                messages.append(msg)
+            messages.append({"role": "user", "content": message})
+            
+            if stream:
+                # For streaming, we return immediately and stream via WebSocket events
+                # This is a simplified non-streaming response for now
+                # TODO: Implement proper streaming via WebSocket
+                pass
+            
+            response = await self._llm_service.complete(
+                messages=messages,
+                category=category,
+                stream=False
+            )
+            
+            return {
+                "status": "success",
+                "response": response.content,
+                "model": response.model,
+                "usage": response.usage
+            }
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            return {"status": "error", "error": str(e)}
+
 
     @command("plugins.install", constants.CORE_PLUGIN_NAME)
     async def install_plugin(self, download_url: str = "", repo_url: str = "", plugin_id: str = "", **kwargs) -> Dict[str, Any]:

@@ -60,25 +60,36 @@ class PipelineNodes:
         if state.response:
             return state.model_dump()
 
-        # 2. Default LLM Call
-        if not self.llm_client:
-             response = self._get_placeholder_response(state)
+        # 2. Default LLM Call using LLMService
+        if not self.llm_client or not hasattr(self.llm_client, 'llm_service'):
+            response = self._get_placeholder_response(state)
         else:
             try:
-                system_prompt = state.metadata.get("final_system_prompt", "")
-                messages = [SystemMessage(content=system_prompt)]
-                for msg in state.history:
-                    if msg.get("role") == "user":
-                        messages.append(HumanMessage(content=msg.get("content", "")))
-                    elif msg.get("role") == "assistant":
-                        messages.append(AIMessage(content=msg.get("content", "")))
-                messages.append(HumanMessage(content=state.message))
+                # Build messages for LLMService
+                system_prompt = state.metadata.get("final_system_prompt", "You are a helpful assistant.")
+                messages = [{"role": "system", "content": system_prompt}]
                 
-                result = await self.llm_client.ainvoke(messages)
-                response = result.content
+                for msg in state.history:
+                    messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+                
+                messages.append({"role": "user", "content": state.message})
+                
+                # Get category from metadata or default to "fast"
+                category = state.metadata.get("category", "fast")
+                
+                # Use LLMService via pipeline
+                llm_response = await self.llm_client.complete(
+                    messages=messages,
+                    category=category,
+                    stream=False  # Non-streaming for graph mode
+                )
+                response = llm_response.content
             except Exception as e:
                 self._logger.error(f"LLM Error: {e}")
-                response = self._get_placeholder_response(state)
+                response = f"[Error] {str(e)}"
 
         state.response = response
         return state.model_dump()

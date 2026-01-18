@@ -2,7 +2,16 @@
  * Vault Settings Modal Module
  * 
  * Handles the settings button and modal for vault configuration.
+ * Includes API key management and model category selection.
  */
+
+import { request } from './connection.js';
+
+// State for settings
+let providersStatus = {};
+let availableModels = {};
+let categoryConfig = {};
+let categoriesInfo = {};
 
 /**
  * Initialize the settings button
@@ -25,40 +34,150 @@ export function initSettings() {
 
         if (window.ui && window.ui.showModal) {
             const settingsHtml = `
-                <div class="vault-settings-modal">
-                    <div class="settings-nav-modal">
-                        <div class="settings-nav-item-modal active" data-section="general">
-                            <i data-lucide="settings"></i>
+                <div class="vault-settings-modal" style="display: flex; height: 500px; gap: 0;">
+                    <div class="settings-nav-modal" style="
+                        width: 220px;
+                        background: var(--bg-secondary, #f8fafc);
+                        border-right: 1px solid var(--border-subtle);
+                        padding: 16px 12px;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 4px;
+                        flex-shrink: 0;
+                    ">
+                        <div style="
+                            padding: 0 12px 12px 12px;
+                            margin-bottom: 8px;
+                            border-bottom: 1px solid var(--border-subtle);
+                            font-weight: 600;
+                            color: var(--text-primary);
+                            font-size: 0.9rem;
+                        ">
+                            Configuration
+                        </div>
+                        
+                        <button class="settings-nav-item-modal active" data-section="general" style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            padding: 10px 12px;
+                            border: none;
+                            background: transparent;
+                            color: var(--text-secondary);
+                            border-radius: 6px;
+                            cursor: pointer;
+                            text-align: left;
+                            font-size: 14px;
+                            transition: all 0.2s;
+                            width: 100%;
+                            font-family: inherit;
+                        ">
+                            <i data-lucide="settings" style="width: 18px; height: 18px;"></i>
                             <span>General</span>
-                        </div>
-                        <div class="settings-nav-item-modal" data-section="plugins">
-                            <i data-lucide="puzzle"></i>
+                        </button>
+                        
+                        <button class="settings-nav-item-modal" data-section="plugins" style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            padding: 10px 12px;
+                            border: none;
+                            background: transparent;
+                            color: var(--text-secondary);
+                            border-radius: 6px;
+                            cursor: pointer;
+                            text-align: left;
+                            font-size: 14px;
+                            transition: all 0.2s;
+                            width: 100%;
+                            font-family: inherit;
+                        ">
+                            <i data-lucide="puzzle" style="width: 18px; height: 18px;"></i>
                             <span>Plugins</span>
-                        </div>
-                        <div class="settings-nav-item-modal" data-section="ai">
-                            <i data-lucide="brain"></i>
-                            <span>AI Models</span>
-                        </div>
+                        </button>
+                        
+                        <button class="settings-nav-item-modal" data-section="api-keys" style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            padding: 10px 12px;
+                            border: none;
+                            background: transparent;
+                            color: var(--text-secondary);
+                            border-radius: 6px;
+                            cursor: pointer;
+                            text-align: left;
+                            font-size: 14px;
+                            transition: all 0.2s;
+                            width: 100%;
+                            font-family: inherit;
+                        ">
+                            <i data-lucide="key" style="width: 18px; height: 18px;"></i>
+                            <span>API Keys</span>
+                        </button>
+                        
+                        <button class="settings-nav-item-modal" data-section="models" style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            padding: 10px 12px;
+                            border: none;
+                            background: transparent;
+                            color: var(--text-secondary);
+                            border-radius: 6px;
+                            cursor: pointer;
+                            text-align: left;
+                            font-size: 14px;
+                            transition: all 0.2s;
+                            width: 100%;
+                            font-family: inherit;
+                        ">
+                            <i data-lucide="brain" style="width: 18px; height: 18px;"></i>
+                            <span>Model Categories</span>
+                        </button>
                     </div>
-                    <div id="settings-modal-content" style="padding: 20px;">
-                        <h3>General Settings</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                            Configure your vault settings here.
+                    
+                    <div id="settings-modal-content" style="
+                        flex: 1;
+                        padding: 24px 32px;
+                        background: var(--bg-card);
+                        overflow-y: auto;
+                    ">
+                        <h3 style="margin-top: 0; font-size: 1.25rem;">General Settings</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px;">
+                            Configure your vault settings and preferences.
                         </p>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div class="setting-item">
-                                <strong>Vault Path:</strong>
-                                <code style="background: var(--surface-color); padding: 4px 8px; border-radius: 4px;">${vaultPath}</code>
+                                <label style="display: block; font-weight: 500; margin-bottom: 8px; color: var(--text-primary);">Vault Path</label>
+                                <div style="
+                                    background: var(--bg-app); 
+                                    padding: 10px 12px; 
+                                    border: 1px solid var(--border-subtle); 
+                                    border-radius: 6px;
+                                    font-family: var(--font-mono);
+                                    font-size: 13px;
+                                    color: var(--text-secondary);
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                ">
+                                    <i data-lucide="folder" style="width: 14px; height: 14px;"></i>
+                                    ${vaultPath}
+                                </div>
                             </div>
-                            <button class="btn btn-secondary" onclick="window.request('system.client_ready', {}); window.ui.closeModal();">
-                                <i data-lucide="refresh-cw"></i>
-                                Reload
-                            </button>
+                            
+                            <div style="padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+                                <button class="btn btn-secondary" onclick="window.request('system.client_ready', {}); window.ui.closeModal();" style="width: fit-content;">
+                                    <i data-lucide="refresh-cw"></i>
+                                    Reload Application
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
-            window.ui.showModal('Vault Settings', settingsHtml, '600px');
+            window.ui.showModal('Vault Settings', settingsHtml, '850px');
 
             // Reinitialize Lucide icons in modal
             setTimeout(() => {
@@ -75,27 +194,68 @@ export function initSettings() {
 /**
  * Setup settings navigation between sections
  */
+/**
+ * Setup settings navigation between sections
+ */
 function setupSettingsNavigation() {
     const navItems = document.querySelectorAll('.settings-nav-item-modal');
     const contentEl = document.getElementById('settings-modal-content');
 
     if (!navItems.length || !contentEl) return;
 
-    navItems.forEach(item => {
-        item.addEventListener('click', () => {
-            navItems.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
+    // Helper to update styles
+    const updateActiveState = (selectedItem) => {
+        navItems.forEach(item => {
+            const isActive = item === selectedItem;
+            item.classList.toggle('active', isActive);
 
+            // Apply active styles dynamically since we're using inline styles for the base
+            if (isActive) {
+                item.style.background = 'var(--bg-app)';
+                item.style.color = 'var(--text-primary)';
+                item.style.fontWeight = '500';
+            } else {
+                item.style.background = 'transparent';
+                item.style.color = 'var(--text-secondary)';
+                item.style.fontWeight = 'normal';
+            }
+        });
+    };
+
+    navItems.forEach(item => {
+        // Add hover effect listeners manually since we're using inline styles
+        item.addEventListener('mouseenter', () => {
+            if (!item.classList.contains('active')) {
+                item.style.background = 'var(--bg-overlay, rgba(0,0,0,0.03))';
+                item.style.color = 'var(--text-primary)';
+            }
+        });
+
+        item.addEventListener('mouseleave', () => {
+            if (!item.classList.contains('active')) {
+                item.style.background = 'transparent';
+                item.style.color = 'var(--text-secondary)';
+            }
+        });
+
+        item.addEventListener('click', () => {
+            updateActiveState(item);
             const section = item.dataset.section;
             renderSettingsSection(contentEl, section);
         });
     });
+
+    // Set initial state
+    const activeItem = document.querySelector('.settings-nav-item-modal.active');
+    if (activeItem) {
+        updateActiveState(activeItem);
+    }
 }
 
 /**
  * Render settings section content
  */
-function renderSettingsSection(container, section) {
+async function renderSettingsSection(container, section) {
     const params = new URLSearchParams(window.location.search);
     const vaultPath = params.get('vault') || params.get('path') || '';
 
@@ -118,6 +278,7 @@ function renderSettingsSection(container, section) {
                 </div>
             `;
             break;
+
         case 'plugins':
             container.innerHTML = `
                 <h3>Plugins</h3>
@@ -130,23 +291,375 @@ function renderSettingsSection(container, section) {
                 </button>
             `;
             break;
-        case 'ai':
-            container.innerHTML = `
-                <h3>AI Models</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                    Configure AI model settings in your .vault.json file.
-                </p>
-                <div class="setting-item" style="margin-bottom: 12px;">
-                    <strong>API Configuration:</strong>
-                    <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                        Set your OpenAI API key in the .env file or .vault.json to enable AI features.
-                    </p>
-                </div>
-            `;
+
+        case 'api-keys':
+            await renderApiKeysSection(container);
             break;
+
+        case 'models':
+            await renderModelsSection(container);
+            break;
+
         default:
             container.innerHTML = '<p>Section not found.</p>';
     }
 
     if (window.lucide) window.lucide.createIcons();
 }
+
+/**
+ * Render API Keys section
+ */
+async function renderApiKeysSection(container) {
+    container.innerHTML = `
+        <h3>API Keys</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            Configure API keys for LLM providers. Keys are stored securely in your system's credential manager.
+        </p>
+        <div id="api-keys-loading" style="text-align: center; padding: 20px;">
+            <p>Loading providers...</p>
+        </div>
+        <div id="api-keys-list" style="display: none;"></div>
+    `;
+
+    // Load providers status
+    try {
+        const res = await request('execute_command', {
+            command: 'settings.list_providers',
+            args: {}
+        });
+
+        const result = res.result?.result || res.result || {};
+        providersStatus = result.providers || {};
+
+        renderApiKeysList();
+    } catch (e) {
+        container.querySelector('#api-keys-loading').innerHTML = `
+            <p style="color: var(--error-color);">Error loading providers: ${e.message}</p>
+        `;
+    }
+}
+
+/**
+ * Render the API keys list
+ */
+function renderApiKeysList() {
+    const loadingEl = document.getElementById('api-keys-loading');
+    const listEl = document.getElementById('api-keys-list');
+
+    if (!listEl) return;
+
+    loadingEl.style.display = 'none';
+    listEl.style.display = 'block';
+
+    let html = '<div class="api-keys-grid">';
+
+    for (const [providerId, info] of Object.entries(providersStatus)) {
+        const isConfigured = info.configured;
+        const statusClass = isConfigured ? 'status-configured' : 'status-not-configured';
+        const statusText = isConfigured ? 'Configured' : 'Not configured';
+
+        html += `
+            <div class="api-key-card">
+                <div class="api-key-header">
+                    <span class="provider-name">${info.name}</span>
+                    <span class="provider-status ${statusClass}">${statusText}</span>
+                </div>
+                <div class="api-key-body">
+                    ${isConfigured ? `
+                        <div class="api-key-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="verifyApiKey('${providerId}')">
+                                <i data-lucide="check-circle"></i> Verify
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteApiKey('${providerId}')">
+                                <i data-lucide="trash-2"></i> Remove
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="api-key-input-group">
+                            <input type="password" id="api-key-${providerId}" placeholder="Enter API key..." class="api-key-input">
+                            <button class="btn btn-sm btn-primary" onclick="saveApiKey('${providerId}')">
+                                <i data-lucide="save"></i> Save
+                            </button>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+
+    // Add Ollama detection card
+    html += `
+        <div class="api-key-card ollama-card">
+            <div class="api-key-header">
+                <span class="provider-name">Ollama (Local)</span>
+                <span class="provider-status" id="ollama-status">Checking...</span>
+            </div>
+            <div class="api-key-body">
+                <button class="btn btn-sm btn-secondary" onclick="detectOllama()">
+                    <i data-lucide="search"></i> Detect Ollama
+                </button>
+                <div id="ollama-models" style="margin-top: 10px; display: none;"></div>
+            </div>
+        </div>
+    `;
+
+    html += '</div>';
+    listEl.innerHTML = html;
+
+    if (window.lucide) window.lucide.createIcons();
+
+    // Check Ollama status
+    detectOllama();
+}
+
+// Global functions for button handlers
+window.saveApiKey = async function (provider) {
+    const input = document.getElementById(`api-key-${provider}`);
+    const apiKey = input?.value?.trim();
+
+    if (!apiKey) {
+        alert('Please enter an API key');
+        return;
+    }
+
+    try {
+        const res = await request('execute_command', {
+            command: 'settings.store_api_key',
+            args: { provider, api_key: apiKey }
+        });
+
+        const result = res.result?.result || res.result || {};
+
+        if (result.status === 'success') {
+            providersStatus[provider] = { ...providersStatus[provider], configured: true };
+            renderApiKeysList();
+        } else {
+            alert('Error: ' + (result.error || 'Failed to save API key'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.deleteApiKey = async function (provider) {
+    if (!confirm(`Remove API key for ${providersStatus[provider]?.name || provider}?`)) {
+        return;
+    }
+
+    try {
+        const res = await request('execute_command', {
+            command: 'settings.delete_api_key',
+            args: { provider }
+        });
+
+        const result = res.result?.result || res.result || {};
+
+        if (result.status === 'success') {
+            providersStatus[provider] = { ...providersStatus[provider], configured: false };
+            renderApiKeysList();
+        } else {
+            alert('Error: ' + (result.error || 'Failed to delete API key'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.verifyApiKey = async function (provider) {
+    const card = document.querySelector(`.api-key-card`);
+
+    try {
+        const res = await request('execute_command', {
+            command: 'settings.verify_api_key',
+            args: { provider }
+        });
+
+        const result = res.result?.result || res.result || {};
+
+        if (result.valid) {
+            alert(`✅ ${providersStatus[provider]?.name} API key is valid!`);
+        } else {
+            alert(`❌ ${providersStatus[provider]?.name} API key verification failed: ${result.error || 'Invalid key'}`);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.detectOllama = async function () {
+    const statusEl = document.getElementById('ollama-status');
+    const modelsEl = document.getElementById('ollama-models');
+
+    if (!statusEl) return;
+
+    statusEl.textContent = 'Checking...';
+    statusEl.className = 'provider-status';
+
+    try {
+        const res = await request('execute_command', {
+            command: 'settings.detect_ollama',
+            args: {}
+        });
+
+        const result = res.result?.result || res.result || {};
+
+        if (result.available) {
+            statusEl.textContent = 'Running';
+            statusEl.className = 'provider-status status-configured';
+
+            if (modelsEl && result.models?.length) {
+                modelsEl.style.display = 'block';
+                modelsEl.innerHTML = `
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">
+                        ${result.models.length} model(s) available:
+                    </p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                        ${result.models.map(m => `
+                            <span class="tag">${m.name}</span>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        } else {
+            statusEl.textContent = 'Not running';
+            statusEl.className = 'provider-status status-not-configured';
+            if (modelsEl) modelsEl.style.display = 'none';
+        }
+    } catch (e) {
+        statusEl.textContent = 'Error';
+        statusEl.className = 'provider-status status-not-configured';
+    }
+};
+
+/**
+ * Render Model Categories section
+ */
+async function renderModelsSection(container) {
+    container.innerHTML = `
+        <h3>Model Categories</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            Assign models to each category. Plugins use these categories to access the appropriate model.
+        </p>
+        <div id="models-loading" style="text-align: center; padding: 20px;">
+            <p>Loading models...</p>
+        </div>
+        <div id="models-config" style="display: none;"></div>
+    `;
+
+    try {
+        // Load available models
+        const modelsRes = await request('execute_command', {
+            command: 'settings.get_available_models',
+            args: {}
+        });
+        availableModels = modelsRes.result?.result?.models || modelsRes.result?.models || {};
+
+        // Load category config
+        const catRes = await request('execute_command', {
+            command: 'settings.get_model_categories',
+            args: {}
+        });
+        const catResult = catRes.result?.result || catRes.result || {};
+        categoriesInfo = catResult.categories_info || {};
+        categoryConfig = catResult.configured || {};
+
+        renderModelsCategoryConfig();
+    } catch (e) {
+        container.querySelector('#models-loading').innerHTML = `
+            <p style="color: var(--error-color);">Error loading models: ${e.message}</p>
+        `;
+    }
+}
+
+/**
+ * Render model category configuration
+ */
+function renderModelsCategoryConfig() {
+    const loadingEl = document.getElementById('models-loading');
+    const configEl = document.getElementById('models-config');
+
+    if (!configEl) return;
+
+    loadingEl.style.display = 'none';
+    configEl.style.display = 'block';
+
+    // Build flat list of all available models
+    const allModels = [];
+    for (const [providerId, models] of Object.entries(availableModels)) {
+        for (const model of models) {
+            allModels.push({
+                ...model,
+                provider: providerId,
+                fullId: `${providerId}/${model.id}`
+            });
+        }
+    }
+
+    let html = '<div class="category-config-grid">';
+
+    for (const [categoryId, info] of Object.entries(categoriesInfo)) {
+        const currentModel = categoryConfig[categoryId] || '';
+        const categoryModels = allModels.filter(m => m.categories.includes(categoryId));
+
+        html += `
+            <div class="category-config-card">
+                <div class="category-header">
+                    <div class="category-title">
+                        <i data-lucide="${info.icon || 'cpu'}"></i>
+                        <span>${info.name || categoryId}</span>
+                    </div>
+                    <span class="category-description">${info.description || ''}</span>
+                </div>
+                <div class="category-body">
+                    <select id="category-${categoryId}" class="category-select" onchange="setCategoryModel('${categoryId}', this.value)">
+                        <option value="">Not configured</option>
+                        ${categoryModels.map(m => `
+                            <option value="${m.fullId}" ${currentModel === m.fullId ? 'selected' : ''}>
+                                ${m.name} (${m.provider})
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    if (Object.keys(availableModels).length === 0) {
+        html = `
+            <div class="empty-state">
+                <i data-lucide="alert-circle"></i>
+                <p>No models available. Configure API keys first.</p>
+            </div>
+        `;
+    }
+
+    configEl.innerHTML = html;
+
+    if (window.lucide) window.lucide.createIcons();
+}
+
+window.setCategoryModel = async function (category, model) {
+    if (!model) return;
+
+    try {
+        const res = await request('execute_command', {
+            command: 'settings.set_model_category',
+            args: { category, model }
+        });
+
+        const result = res.result?.result || res.result || {};
+
+        if (result.status === 'success') {
+            categoryConfig[category] = model;
+            console.log(`[Settings] Set ${category} model to ${model}`);
+        } else {
+            alert('Error: ' + (result.error || 'Failed to save model configuration'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+};
+

@@ -5,7 +5,7 @@
     "description": "Refines and improves your prompts before sending them to the LLM for better responses",
     "author": {
         "name": "Tailor Team",
-        "url": "https://github.com/tailor-dev"
+        "url": "https://github.com/tailor"
     },
     "main": "main.py",
     "keywords": [
@@ -18,7 +18,7 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/tailor-dev/prompt-refiner"
+        "url": "https://github.com/tailor/prompt-refiner"
     },
     "tailor": {
         "minVersion": "1.0.0"

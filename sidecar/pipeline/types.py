@@ -6,12 +6,16 @@ class PipelineConfig(BaseModel):
     """Configuration for the LLM pipeline."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
-    model: str = Field(default="gpt-4", description="LLM Model ID")
+    # Category-based model selection (replaces direct model specification)
+    category: str = Field(default="fast", description="Model category to use")
+    
+    # Generation parameters
     temperature: float = 0.7
     max_tokens: int = 4096
     timeout: float = 30.0
-    enable_streaming: bool = False
-    api_key: Optional[str] = None
+    
+    # Streaming is now default
+    stream: bool = True
     
     # Graph specific settings
     is_graph_mode: bool = False

@@ -18,38 +18,47 @@ export class ModalManager {
                 display: none;
                 position: fixed;
                 top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0,0,0,0.6);
+                background: rgba(0,0,0,0.5);
+                backdrop-filter: blur(4px);
                 z-index: 1000;
                 justify-content: center;
                 align-items: center;
             `;
             overlay.innerHTML = `
                 <div id="plugin-modal" class="modal-dialog" style="
-                    background: var(--surface-color);
-                    border-radius: 8px;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-                    max-height: 80vh;
+                    background: var(--bg-card);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: var(--border-radius, 12px);
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                    max-height: 85vh;
                     overflow: hidden;
                     display: flex;
                     flex-direction: column;
+                    color: var(--text-primary);
                 ">
                     <div class="modal-header" style="
-                        padding: 16px 20px;
-                        border-bottom: 1px solid var(--border-color);
+                        padding: 20px 24px;
+                        border-bottom: 1px solid var(--border-subtle);
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
+                        background: var(--bg-card);
                     ">
-                        <h3 id="modal-title" style="margin:0; font-size:1rem;"></h3>
+                        <h3 id="modal-title" style="margin:0; font-size:1.1rem; font-weight:600; color:var(--text-primary);"></h3>
                         <button id="modal-close-btn" class="icon-btn" style="
-                            background: none; border: none; cursor: pointer;
-                            color: var(--text-secondary); font-size: 1.2rem;
-                        ">&times;</button>
+                            background: transparent; border: none; cursor: pointer;
+                            color: var(--text-secondary); width: 32px; height: 32px;
+                            display: flex; align-items: center; justify-content: center;
+                            border-radius: 6px; transition: background 0.2s;
+                        ">
+                            <i data-lucide="x" style="width:20px; height:20px;"></i>
+                        </button>
                     </div>
                     <div id="modal-content" class="modal-body" style="
-                        padding: 20px;
+                        padding: 0;
                         overflow-y: auto;
                         flex: 1;
+                        background: var(--bg-app);
                     "></div>
                 </div>
             `;

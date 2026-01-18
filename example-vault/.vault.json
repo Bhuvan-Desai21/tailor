@@ -4,11 +4,21 @@
     "version": "1.0.0",
     "description": "Example vault demonstrating Tailor's plugin system",
     "created": "2025-12-31T01:30:00Z",
-    "plugins": {
-        "llm": {
-            "enabled": true,
-            "model": "gpt-4"
+    "llm": {
+        "categories": {
+            "thinking": "openai/gpt-4o",
+            "fast": "openai/gpt-4o-mini",
+            "vision": "openai/gpt-4o",
+            "code": "openai/gpt-4o",
+            "embedding": "openai/text-embedding-3-large",
+            "audio": "openai/whisper-1"
         },
+        "defaults": {
+            "temperature": 0.7,
+            "max_tokens": 4096
+        }
+    },
+    "plugins": {
         "explorer": {
             "enabled": true
         },

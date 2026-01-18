@@ -6,7 +6,7 @@ Design principles and patterns for building consistent, minimal UIs across the T
 
 **Ultra Minimal, Dense, Developer-First**
 - Dark theme (GitHub Dark Dimmed inspiration)
-- **Source of Truth**: All styling must use variables from `frontend/theme.css`.
+- **Source of Truth**: All styling must use variables from `src/styles/theme.css`.
 - External dependencies (fonts, libraries) are permitted when they add value.
 - Fast to load, highly functional.
 

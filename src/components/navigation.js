@@ -22,14 +22,6 @@ export function createNavigation() {
                     <i data-lucide="message-square"></i>
                     <span>Conversations</span>
                 </div>
-                <div class="nav-item" data-route="plugin-store">
-                    <i data-lucide="package"></i>
-                    <span>Plugin Store</span>
-                </div>
-                <div class="nav-item" data-route="developer-mode">
-                    <i data-lucide="code"></i>
-                    <span>Developer</span>
-                </div>
             </div>
 
             <div class="nav-section nav-section-bottom">
@@ -50,10 +42,10 @@ export function initNavigation() {
         item.addEventListener('click', () => {
             // Remove active class from all items
             navItems.forEach(i => i.classList.remove('active'));
-            
+
             // Add active class to clicked item
             item.classList.add('active');
-            
+
             // Navigate to route
             const route = item.dataset.route;
             if (route && window.router) {
