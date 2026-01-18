@@ -42,7 +42,9 @@
         window.router.register('vault-settings', initVaultSettings);
         window.router.register('settings', initSettings);
 
-        // Router is initialized automatically in router.js
+        // Start router and load initial page
+        const initialRoute = window.location.hash.slice(1) || 'dashboard';
+        window.router.loadRoute(initialRoute);
     </script>
 </body>
 

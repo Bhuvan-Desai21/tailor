@@ -16,10 +16,6 @@ class Router {
         window.addEventListener('popstate', (e) => {
             this.loadRoute(window.location.hash.slice(1) || 'dashboard');
         });
-
-        // Load initial route
-        const hash = window.location.hash.slice(1) || 'dashboard';
-        this.loadRoute(hash);
     }
 
     register(path, pageComponent) {
@@ -56,7 +52,7 @@ class Router {
 
         // Check if page already exists in DOM
         let pageElement = document.getElementById(`page-${route}`);
-        
+
         if (!pageElement) {
             // Create page container
             pageElement = document.createElement('div');
