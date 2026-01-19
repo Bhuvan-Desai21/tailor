@@ -44,7 +44,7 @@ def test_pipeline_context_validation():
 def test_pipeline_config_defaults():
     """Test PipelineConfig defaults."""
     cfg = PipelineConfig()
-    assert cfg.model == "gpt-4"
+    assert cfg.category == "fast"
     assert cfg.temperature == 0.7
     assert cfg.is_graph_mode is False
 

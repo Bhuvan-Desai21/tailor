@@ -18,12 +18,8 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
-try:
-    import litellm
-    from litellm import acompletion, aembedding
-    LITELLM_AVAILABLE = True
-except ImportError:
-    LITELLM_AVAILABLE = False
+import litellm
+from litellm import acompletion
 
 try:
     import httpx
@@ -111,8 +107,7 @@ class LLMService:
         self._ollama_models: Optional[List[OllamaModel]] = None
         self._ollama_available: Optional[bool] = None
         
-        if not LITELLM_AVAILABLE:
-            self._logger.warning("LiteLLM not available")
+
     
     def _load_registry(self) -> Dict[str, Any]:
         """Load the models registry JSON."""
@@ -324,8 +319,7 @@ class LLMService:
         Returns:
             LLMResponse or AsyncGenerator if streaming
         """
-        if not LITELLM_AVAILABLE:
-            raise RuntimeError("LiteLLM not available")
+
         
         # Determine model to use
         model_id = model or self.get_model_for_category(category)
