@@ -71,6 +71,15 @@ class EventType(str, Enum):
 
     UI_COMMAND = "UI_COMMAND"
     """UI command event."""
+    
+    CHAT_TOKEN = "CHAT_TOKEN"
+    """Chat streaming token event - sent for each token during streaming response."""
+    
+    CHAT_STREAM_START = "CHAT_STREAM_START"
+    """Chat stream started event - sent when streaming begins."""
+    
+    CHAT_STREAM_END = "CHAT_STREAM_END"
+    """Chat stream completed event - sent when streaming finishes."""
 
 
 class EventScope(str, Enum):

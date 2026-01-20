@@ -80,55 +80,25 @@ class Plugin(PluginBase):
         """Called when frontend connects - register UI elements."""
         self.logger.info("Client connected - registering refiner UI")
         
-        # Add a refined button to the Toolbox (Right Panel)
-        # Using a nice card style for the item
-        html = """
-        <div style="
-            background: var(--surface-2);
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        ">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div style="
-                    background: var(--primary-color);
-                    color: white;
-                    width: 32px; height: 32px;
-                    border-radius: 6px;
-                    display: flex; align-items: center; justify-content: center;
-                ">
-                    <i data-lucide="sparkles" style="width:18px; height:18px;"></i>
-                </div>
-                <div>
-                    <div style="font-weight:600; font-size:0.9rem;">Prompt Refiner</div>
-                    <div style="font-size:0.8rem; color:var(--text-secondary);">Improve your query</div>
-                </div>
-            </div>
-            
-            <button onclick="window.request('refiner.refine_from_ui', {})" 
-                style="
-                background: transparent;
-                border: 1px solid var(--border-color);
-                color: var(--text-primary);
-                padding: 6px 12px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 0.85rem;
-                transition: all 0.2s;
-            " onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
-                Refine
-            </button>
-        </div>
-        """
+        # Register a composer action button (appears in chat input toolbar)
+        self.brain.emit_to_frontend(
+            event_type=EventType.UI_COMMAND,
+            data={
+                "action": "register_action",
+                "id": "prompt-refiner",
+                "icon": "wand-2",  # Magic wand icon
+                "label": "Refine Prompt",
+                "position": 20,
+                "type": "button",
+                "command": "refiner.refine_from_ui",
+                "location": "composer-actionbar"
+            }
+        )
         
-        await self.add_toolbox_item(html)
-        
-        self.notify("Prompt Refiner ready in Toolbox!", severity="success")
+        self.logger.info("Registered prompt-refiner composer action")
+        self.notify("Prompt Refiner ready!", severity="success")
     
-    async def _handle_refine_from_ui(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_refine_from_ui(self, **kwargs) -> Dict[str, Any]:
         """Handle refine request from UI - gets text from frontend."""
         # This handler is called when the toolbar button is clicked
         # We need to tell the frontend to send us the current input text

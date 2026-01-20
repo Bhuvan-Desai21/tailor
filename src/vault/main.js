@@ -5,8 +5,9 @@
  */
 
 import { SidebarManager, PanelManager, ToolbarManager, ModalManager, ToolboxManager } from './managers/index.js';
+import { registerAction, refreshComposerToolbar } from './chat/index.js';
 import { initLayout, initResize, log } from './layout.js';
-import { autoConnect } from './connection.js';
+import { autoConnect, request } from './connection.js';
 import { loadPlugins, handleEvent } from './plugins.js';
 import { initSettings } from './settings.js';
 import { initPluginStore } from './plugin-store.js';
@@ -48,7 +49,41 @@ export function initVault() {
 
         // Modal dialogs
         showModal: (title, html, width) => modal.show(title, html, width),
-        closeModal: () => modal.close()
+        closeModal: () => modal.close(),
+
+        // Action Toolbar (for plugin extensibility)
+        // Supports location: 'message-actionbar' or 'composer-actionbar'
+        registerAction: (action) => {
+            // Wrap the command as a handler if provided
+            if (action.command && !action.handler) {
+                action.handler = async (message, itemId, context) => {
+                    try {
+                        await request('execute_command', {
+                            command: action.command,
+                            args: {
+                                message: message?.content || '',
+                                role: message?.role || '',
+                                itemId,
+                                context
+                            }
+                        });
+                    } catch (e) {
+                        console.error(`[Action] Command ${action.command} failed:`, e);
+                    }
+                };
+            }
+            registerAction(action);
+            // Refresh composer toolbar if this is a composer action
+            if (action.location === 'composer-actionbar') {
+                refreshComposerToolbar();
+            }
+        },
+
+        // Legacy alias for backwards compatibility
+        registerMessageAction: (action) => {
+            action.location = 'message-actionbar';
+            window.ui.registerAction(action);
+        }
     };
 
     // Initialize GoldenLayout
