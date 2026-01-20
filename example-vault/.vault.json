@@ -5,6 +5,11 @@
     "description": "Example vault demonstrating Tailor's plugin system",
     "created": "2025-12-31T01:30:00Z",
     "llm": {
+        "providers": {
+            "ollama": {
+                "base_url": "http://localhost:11434"
+            }
+        },
         "categories": {
             "thinking": "openai/gpt-4o",
             "fast": "openai/gpt-4o-mini",

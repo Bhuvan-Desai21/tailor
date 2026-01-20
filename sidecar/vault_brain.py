@@ -23,6 +23,7 @@ from .pipeline import DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
 from .services.keyring_service import get_keyring_service, KeyringService, PROVIDERS
 from .services.llm_service import get_llm_service, LLMService, reset_llm_service
+from .event_bus import EventBus
 
 # Local import avoids circular dependency in type checking if used carefully
 # from .api.plugin_base import PluginBase
@@ -75,7 +76,12 @@ class VaultBrain:
         
         self.plugins: Dict[str, Any] = {}
         self.commands: Dict[str, Dict[str, Any]] = {}
-        self.subscribers: Dict[str, List[EventHandler]] = defaultdict(list)
+        
+        # Internal Event Bus
+        self.events = EventBus()
+        # Deprecated: direct access to subscribers, kept for safety if needed but ideally unused
+        # self.subscribers is now managed by self.events
+        
         self.ws_server = ws_server
                 
         self.config: Dict[str, Any] = {}
@@ -89,6 +95,36 @@ class VaultBrain:
         
         self._initialized = True
         logger.info(f"VaultBrain Singleton created for: {self.vault_path}")
+
+    # ...
+
+    # Internal Pub/Sub (Use sparingly!)
+    
+    def subscribe(self, event: str, handler: EventHandler, priority: int = 0) -> None:
+        """
+        Subscribe to an internal Python event.
+        Delegates to EventBus.
+        """
+        self.events.subscribe(event, handler, priority)
+
+    def unsubscribe(self, event: str, handler: EventHandler) -> bool:
+        """
+        Unsubscribe from an internal Python event.
+        Delegates to EventBus.
+        """
+        return self.events.unsubscribe(event, handler)
+
+    def clear_subscribers(self, event: str) -> None:
+        """Clear all subscribers for an event."""
+        self.events.clear_subscribers(event)
+
+    async def publish(self, event: str, sequential: bool = False, **kwargs: Any) -> None:
+        """
+        Publish an internal Python event.
+        Delegates to EventBus.
+        """
+        # print(f"DEBUG: VaultBrain publishing {event}")
+        await self.events.publish(event, sequential=sequential, **kwargs)
 
     async def initialize(self) -> None:
         """
@@ -654,17 +690,18 @@ class VaultBrain:
                 # TODO: Implement proper streaming via WebSocket
                 pass
             
-            response = await self._llm_service.complete(
-                messages=messages,
-                category=category,
-                stream=False
+            # Use Pipeline
+            context = await self.pipeline.run(
+                message=message,
+                history=history,
+                stream=stream
             )
             
             return {
                 "status": "success",
-                "response": response.content,
-                "model": response.model,
-                "usage": response.usage
+                "response": context.response,
+                "model": "pipeline-model", # context.metadata.get("model", "unknown")
+                "usage": {}
             }
         except Exception as e:
             logger.error(f"Chat error: {e}")
@@ -914,64 +951,7 @@ class VaultBrain:
         )
         self.ws_server.send_to_rust(msg)
 
-    # Internal Pub/Sub (Use sparingly!)
-    
-    def subscribe(self, event: str, handler: EventHandler) -> None:
-        """Subscribe to an internal Python event."""
-        if not inspect.iscoroutinefunction(handler):
-            raise ValueError("Handler must be async")
-        self.subscribers[event].append(handler)
-        logger.debug(f"Subscribed to internal: {event}")
 
-    def unsubscribe(self, event: str, handler: EventHandler) -> bool:
-        """
-        Unsubscribe from an internal Python event.
-        Returns True if handler was found and removed.
-        """
-        if event in self.subscribers:
-            try:
-                self.subscribers[event].remove(handler)
-                logger.debug(f"Unsubscribed from internal: {event}")
-                return True
-            except ValueError:
-                return False
-        return False
-
-    def clear_subscribers(self, event: str) -> None:
-        """Clear all subscribers for an event."""
-        if event in self.subscribers:
-            self.subscribers[event].clear()
-            logger.debug(f"Cleared subscribers for: {event}")
-
-    async def publish(self, event: str, sequential: bool = False, **kwargs: Any) -> None:
-        """
-        Publish an internal Python event.
-        
-        Args:
-            event: Event name
-            sequential: If True, await handlers one by one (useful for pipelines).
-                       If False, run all handlers in parallel (fire-and-forget).
-            **kwargs: Arguments to pass to handlers
-        """
-        handlers = self.subscribers.get(event, [])
-        if not handlers:
-            return
-                    
-        async def safe_exec(h: EventHandler) -> None:
-            try:
-                await h(**kwargs)
-            except Exception as e:
-                logger.exception(f"Event handler failed for '{event}': {e}")
-                # For sequential execution, we might want to propagate errors?
-                # For now, let's log and continue to minimize disruption.
-
-        if sequential:
-            # Execute sequentially
-            for h in handlers:
-                await safe_exec(h)
-        else:
-            # Execute concurrent, isolated
-            await asyncio.gather(*(safe_exec(h) for h in handlers))
 
 
     # =========================================================================

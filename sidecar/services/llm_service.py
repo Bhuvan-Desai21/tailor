@@ -70,19 +70,7 @@ class LLMService:
     - Streaming completions
     """
     
-    # Category to Ollama model mapping (heuristic)
-    OLLAMA_CATEGORY_MAP = {
-        "llama": ["fast", "thinking"],
-        "codellama": ["code", "fast"],
-        "deepseek": ["code", "thinking"],
-        "mistral": ["fast", "thinking"],
-        "mixtral": ["thinking", "code"],
-        "phi": ["fast"],
-        "qwen": ["thinking", "code"],
-        "gemma": ["fast"],
-        "llava": ["vision"],
-        "bakllava": ["vision"],
-    }
+
     
     def __init__(self, vault_path: Path, config: Dict[str, Any]):
         self._logger = logger.bind(component="LLMService")
@@ -117,7 +105,12 @@ class LLMService:
                 return json.load(f)
         except Exception as e:
             self._logger.error(f"Failed to load models registry: {e}")
-            return {"providers": {}, "categories": {}}
+            return {"recommended": {}, "categories": {}}
+
+    async def _fetch_litellm_data(self) -> Dict[str, Any]:
+        """Fetch model data from LiteLLM source."""
+        # Use local litellm.model_cost instead of fetching
+        return litellm.model_cost
     
     # =========================================================================
     # Ollama Detection
@@ -141,7 +134,7 @@ class LLMService:
             self._ollama_models = []
             return []
         
-        base_url = self._registry.get("providers", {}).get("ollama", {}).get(
+        base_url = self.config.get("providers", {}).get("ollama", {}).get(
             "base_url", "http://localhost:11434"
         )
         
@@ -184,15 +177,23 @@ class LLMService:
         return f"{size_bytes:.1f} TB"
     
     def _get_ollama_categories(self, model_name: str) -> List[str]:
-        """Determine categories for an Ollama model based on its name."""
+        """
+        Determine categories for an Ollama model based on its name.
+        Uses keywords defined in the registry categories.
+        """
         name_lower = model_name.lower().split(":")[0]
+        matched_categories = set()
         
-        for keyword, categories in self.OLLAMA_CATEGORY_MAP.items():
-            if keyword in name_lower:
-                return categories
+        categories_config = self._registry.get("categories", {})
         
-        # Default to fast for unknown models
-        return ["fast"]
+        for category_id, config in categories_config.items():
+            keywords = config.get("ollama_keywords", [])
+            for keyword in keywords:
+                if keyword in name_lower:
+                    matched_categories.add(category_id)
+                    break # One match per category is enough
+
+        return list(matched_categories) or ["fast"]
     
     async def is_ollama_available(self) -> bool:
         """Check if Ollama is running."""
@@ -214,25 +215,57 @@ class LLMService:
         available = {}
         configured_providers = self._keyring.list_configured_providers()
         
-        # Add models from configured cloud providers
-        for provider_id in configured_providers:
-            provider_data = self._registry.get("providers", {}).get(provider_id)
-            if not provider_data:
-                continue
+        # Fetch LiteLLM data (could be cached)
+        litellm_data = await self._fetch_litellm_data()
+        
+        # Get recommended models by category from the new structure
+        categories_config = self._registry.get("categories", {})
+        
+        # Invert recommended to get list of used models
+        used_models = set()
+        model_to_categories = {}
+        
+        for cat_id, config in categories_config.items():
+            recs = config.get("recommended", [])
+            for model_id in recs:
+                used_models.add(model_id)
+                if model_id not in model_to_categories:
+                    model_to_categories[model_id] = []
+                model_to_categories[model_id].append(cat_id)
             
-            models = []
-            for model in provider_data.get("models", []):
-                models.append(ModelInfo(
-                    id=model["id"],
-                    name=model.get("name", model["id"]),
-                    provider=provider_id,
-                    categories=model.get("categories", []),
-                    context_window=model.get("context_window"),
-                    is_local=False
-                ))
+        # Group by provider (heuristic based on model name)
+        for model_id in used_models:
+            # Simple heuristic for provider
+            if "gpt" in model_id or "text-embedding" in model_id or "whisper" in model_id:
+                provider = "openai"
+            elif "claude" in model_id:
+                provider = "anthropic"
+            elif "gemini" in model_id:
+                provider = "google"
+            elif "mistral" in model_id or "codestral" in model_id:
+                provider = "mistral"
+            elif "llama" in model_id:
+                provider = "groq" # Defaulting Llama to Groq for now
+            else:
+                provider = "unknown"
+
+            # Get specs from LiteLLM data if available
+            specs = litellm_data.get(model_id, {})
             
-            if models:
-                available[provider_id] = models
+            categories = model_to_categories.get(model_id, [])
+
+            model_info = ModelInfo(
+                id=model_id,
+                name=model_id, # Can improve with formatted name
+                provider=provider,
+                categories=categories,
+                context_window=specs.get("max_input_tokens") or specs.get("max_tokens"),
+                is_local=False
+            )
+            
+            if provider not in available:
+                available[provider] = []
+            available[provider].append(model_info)
         
         # Add Ollama models
         ollama_models = await self.detect_ollama()
@@ -404,14 +437,19 @@ class LLMService:
         if "/" in model_id:
             return model_id
         
-        # Check all providers for this model
-        for provider_id, provider_data in self._registry.get("providers", {}).items():
-            if provider_id == "ollama":
-                continue
-            for model in provider_data.get("models", []):
-                if model["id"] == model_id:
-                    return f"{provider_id}/{model_id}"
-        
+        # Heuristic for provider prefixes
+        if "gpt" in model_id or "text-embedding" in model_id or "whisper" in model_id:
+            return f"openai/{model_id}"
+        elif "claude" in model_id:
+            return f"anthropic/{model_id}"
+        elif "gemini" in model_id:
+            return f"google/{model_id}"
+        elif "mistral" in model_id or "codestral" in model_id:
+            return f"mistral/{model_id}"
+        elif "llama" in model_id and "ollama" not in model_id:
+             # Default Llama to Groq unless it's Ollama
+            return f"groq/{model_id}"
+
         # Check if it's an Ollama model
         if self._ollama_models:
             for m in self._ollama_models:

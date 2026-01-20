@@ -9,17 +9,10 @@ from typing import Optional, List, Dict, Any, AsyncGenerator
 from loguru import logger
 from langgraph.graph import StateGraph, END
 
-
-
 from .types import PipelineConfig, PipelineContext
 from .nodes import PipelineNodes
 
-# Import LLMService for LiteLLM integration
-try:
-    from ..services.llm_service import LLMService, get_llm_service, LLMResponse
-    LLMSERVICE_AVAILABLE = True
-except ImportError:
-    LLMSERVICE_AVAILABLE = False
+from ..services.llm_service import LLMService, get_llm_service, LLMResponse
 
 
 class DefaultPipeline:
@@ -45,7 +38,7 @@ class DefaultPipeline:
     @property
     def llm_service(self) -> Optional[LLMService]:
         """Lazy-load LLMService singleton."""
-        if self._llm_service is None and LLMSERVICE_AVAILABLE:
+        if self._llm_service is None:
             try:
                 self._llm_service = get_llm_service()
             except RuntimeError:
@@ -71,7 +64,7 @@ class DefaultPipeline:
         workflow.add_edge("prompt", "llm")
         workflow.add_edge("llm", "post_process")
         workflow.add_edge("post_process", "output")
-        workflow.add_edge("output", END)
+        workflow.set_finish_point("output")
 
         # Compile
         return workflow.compile()

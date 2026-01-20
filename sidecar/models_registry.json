@@ -1,235 +1,5 @@
 {
-    "version": "1.0.0",
-    "providers": {
-        "openai": {
-            "name": "OpenAI",
-            "models": [
-                {
-                    "id": "gpt-4o",
-                    "name": "GPT-4o",
-                    "categories": [
-                        "thinking",
-                        "vision",
-                        "code"
-                    ],
-                    "context_window": 128000
-                },
-                {
-                    "id": "gpt-4o-mini",
-                    "name": "GPT-4o Mini",
-                    "categories": [
-                        "fast",
-                        "vision"
-                    ],
-                    "context_window": 128000
-                },
-                {
-                    "id": "gpt-4-turbo",
-                    "name": "GPT-4 Turbo",
-                    "categories": [
-                        "thinking",
-                        "code"
-                    ],
-                    "context_window": 128000
-                },
-                {
-                    "id": "gpt-4",
-                    "name": "GPT-4",
-                    "categories": [
-                        "thinking",
-                        "code"
-                    ],
-                    "context_window": 8192
-                },
-                {
-                    "id": "gpt-3.5-turbo",
-                    "name": "GPT-3.5 Turbo",
-                    "categories": [
-                        "fast"
-                    ],
-                    "context_window": 16385
-                },
-                {
-                    "id": "text-embedding-3-large",
-                    "name": "Embedding 3 Large",
-                    "categories": [
-                        "embedding"
-                    ],
-                    "context_window": 8191
-                },
-                {
-                    "id": "text-embedding-3-small",
-                    "name": "Embedding 3 Small",
-                    "categories": [
-                        "embedding"
-                    ],
-                    "context_window": 8191
-                },
-                {
-                    "id": "whisper-1",
-                    "name": "Whisper",
-                    "categories": [
-                        "audio"
-                    ],
-                    "context_window": null
-                }
-            ]
-        },
-        "anthropic": {
-            "name": "Anthropic",
-            "models": [
-                {
-                    "id": "claude-3-5-sonnet-20241022",
-                    "name": "Claude 3.5 Sonnet",
-                    "categories": [
-                        "thinking",
-                        "code",
-                        "vision"
-                    ],
-                    "context_window": 200000
-                },
-                {
-                    "id": "claude-3-5-haiku-20241022",
-                    "name": "Claude 3.5 Haiku",
-                    "categories": [
-                        "fast"
-                    ],
-                    "context_window": 200000
-                },
-                {
-                    "id": "claude-3-opus-20240229",
-                    "name": "Claude 3 Opus",
-                    "categories": [
-                        "thinking"
-                    ],
-                    "context_window": 200000
-                }
-            ]
-        },
-        "google": {
-            "name": "Google AI",
-            "models": [
-                {
-                    "id": "gemini-2.0-flash-exp",
-                    "name": "Gemini 2.0 Flash",
-                    "categories": [
-                        "fast",
-                        "vision"
-                    ],
-                    "context_window": 1000000
-                },
-                {
-                    "id": "gemini-1.5-pro",
-                    "name": "Gemini 1.5 Pro",
-                    "categories": [
-                        "thinking",
-                        "vision"
-                    ],
-                    "context_window": 2000000
-                },
-                {
-                    "id": "gemini-1.5-flash",
-                    "name": "Gemini 1.5 Flash",
-                    "categories": [
-                        "fast",
-                        "vision"
-                    ],
-                    "context_window": 1000000
-                },
-                {
-                    "id": "text-embedding-004",
-                    "name": "Text Embedding 004",
-                    "categories": [
-                        "embedding"
-                    ],
-                    "context_window": 2048
-                }
-            ]
-        },
-        "mistral": {
-            "name": "Mistral AI",
-            "models": [
-                {
-                    "id": "mistral-large-latest",
-                    "name": "Mistral Large",
-                    "categories": [
-                        "thinking",
-                        "code"
-                    ],
-                    "context_window": 128000
-                },
-                {
-                    "id": "mistral-medium-latest",
-                    "name": "Mistral Medium",
-                    "categories": [
-                        "fast"
-                    ],
-                    "context_window": 32000
-                },
-                {
-                    "id": "mistral-small-latest",
-                    "name": "Mistral Small",
-                    "categories": [
-                        "fast"
-                    ],
-                    "context_window": 32000
-                },
-                {
-                    "id": "codestral-latest",
-                    "name": "Codestral",
-                    "categories": [
-                        "code"
-                    ],
-                    "context_window": 32000
-                },
-                {
-                    "id": "mistral-embed",
-                    "name": "Mistral Embed",
-                    "categories": [
-                        "embedding"
-                    ],
-                    "context_window": 8192
-                }
-            ]
-        },
-        "groq": {
-            "name": "Groq",
-            "models": [
-                {
-                    "id": "llama-3.3-70b-versatile",
-                    "name": "Llama 3.3 70B",
-                    "categories": [
-                        "thinking",
-                        "code"
-                    ],
-                    "context_window": 128000
-                },
-                {
-                    "id": "llama-3.1-8b-instant",
-                    "name": "Llama 3.1 8B",
-                    "categories": [
-                        "fast"
-                    ],
-                    "context_window": 128000
-                },
-                {
-                    "id": "mixtral-8x7b-32768",
-                    "name": "Mixtral 8x7B",
-                    "categories": [
-                        "fast",
-                        "code"
-                    ],
-                    "context_window": 32768
-                }
-            ]
-        },
-        "ollama": {
-            "name": "Ollama (Local)",
-            "dynamic": true,
-            "base_url": "http://localhost:11434",
-            "models": []
-        }
-    },
+    "version": "2.1.0",
     "categories": {
         "thinking": {
             "name": "Thinking",
@@ -239,7 +9,15 @@
             "recommended": [
                 "gpt-4o",
                 "claude-3-5-sonnet-20241022",
-                "gemini-1.5-pro"
+                "gemini-1.5-pro",
+                "mistral-large-latest"
+            ],
+            "ollama_keywords": [
+                "llama",
+                "deepseek",
+                "mistral",
+                "mixtral",
+                "qwen"
             ]
         },
         "fast": {
@@ -250,7 +28,15 @@
             "recommended": [
                 "gpt-4o-mini",
                 "claude-3-5-haiku-20241022",
-                "gemini-2.0-flash-exp"
+                "gemini-2.0-flash-exp",
+                "mistral-small-latest"
+            ],
+            "ollama_keywords": [
+                "llama",
+                "codellama",
+                "mistral",
+                "phi",
+                "gemma"
             ]
         },
         "vision": {
@@ -262,6 +48,10 @@
                 "gpt-4o",
                 "claude-3-5-sonnet-20241022",
                 "gemini-1.5-pro"
+            ],
+            "ollama_keywords": [
+                "llava",
+                "bakllava"
             ]
         },
         "code": {
@@ -273,6 +63,12 @@
                 "claude-3-5-sonnet-20241022",
                 "gpt-4o",
                 "codestral-latest"
+            ],
+            "ollama_keywords": [
+                "codellama",
+                "deepseek",
+                "mixtral",
+                "qwen"
             ]
         },
         "embedding": {
@@ -282,8 +78,10 @@
             "fallback": null,
             "recommended": [
                 "text-embedding-3-large",
-                "text-embedding-004"
-            ]
+                "text-embedding-004",
+                "mistral-embed"
+            ],
+            "ollama_keywords": []
         },
         "audio": {
             "name": "Audio",
@@ -292,7 +90,8 @@
             "fallback": null,
             "recommended": [
                 "whisper-1"
-            ]
+            ],
+            "ollama_keywords": []
         }
     }
 }

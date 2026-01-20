@@ -184,9 +184,9 @@ class PluginBase(ABC):
         """Publish internal event."""
         await self.brain.publish(event_name, **kwargs)
 
-    def subscribe(self, event_name: str, handler: Callable[..., Awaitable[None]]) -> None:
+    def subscribe(self, event_name: str, handler: Callable[..., Awaitable[None]], priority: int = 0) -> None:
         """Subscribe to internal event."""
-        self.brain.subscribe(event_name, handler)
+        self.brain.subscribe(event_name, handler, priority)
 
     # =========================================================================
     # UI Helpers - Methods for plugins to control frontend UI elements
