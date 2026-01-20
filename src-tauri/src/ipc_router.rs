@@ -41,6 +41,38 @@ pub async fn open_vault(
 
     println!("Vault opened successfully: window={}, port={}", window_label, ws_port);
 
+    // Register vault in registry
+    let vault_path_buf = PathBuf::from(&vault_path);
+    let config_path = vault_path_buf.join(".vault.json");
+    
+    let mut name = vault_path_buf.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Unknown Vault".to_string());
+    let mut created = None;
+
+    if config_path.exists() {
+        if let Ok(contents) = fs::read_to_string(&config_path) {
+            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&contents) {
+                 if let Some(n) = config.get("name").and_then(|v| v.as_str()) {
+                     name = n.to_string();
+                 }
+                 if let Some(c) = config.get("created").and_then(|v| v.as_str()) {
+                     created = Some(c.to_string());
+                 }
+            }
+        }
+    }
+
+    let vault_item = VaultListItem {
+        name,
+        path: vault_path.clone(),
+        created,
+    };
+
+    if let Err(e) = register_vault_in_registry(&app, &vault_item).await {
+        println!("Warning: Failed to register vault in registry: {}", e);
+    }
+
     Ok(VaultInfo {
         window_label,
         vault_path,

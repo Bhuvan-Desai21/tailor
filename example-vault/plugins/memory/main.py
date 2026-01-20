@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -67,9 +68,12 @@ class Plugin(PluginBase):
         if not ctx.response:
             return
             
-        chat_id = ctx.metadata.get("chat_id", "default")
+        chat_id = ctx.metadata.get("chat_id")
+        if not chat_id:
+            chat_id = f"chat_{int(time.time())}"
+            ctx.metadata["chat_id"] = chat_id
         safe_chat_id = "".join(x for x in chat_id if x.isalnum() or x in "-_")
-        chat_filename = f"chat_{safe_chat_id}.json"
+        chat_filename = f"{safe_chat_id}.json"
         chat_file = self.memory_dir / chat_filename
             
         # Store the whole history as it is in the memory object
@@ -77,9 +81,11 @@ class Plugin(PluginBase):
         full_history = []
         if ctx.history:
             full_history.extend(ctx.history)
-            
-        full_history.append({"role": "user", "content": ctx.message})
-        full_history.append({"role": "assistant", "content": ctx.response})
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M")
+        time_marker = time.time()
+        full_history.append({"role": "user", "content": ctx.message, "timestamp": timestamp, "time_marker": time_marker})
+        full_history.append({"role": "assistant", "content": ctx.response, "timestamp": timestamp, "time_marker": time_marker})
         
         self._save_chat_memory(chat_file, full_history)
         
