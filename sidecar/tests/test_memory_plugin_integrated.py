@@ -13,7 +13,7 @@ async def test_memory_plugin_integrated():
     # Setup paths
     vault_path = Path("/home/arc/Dev/tailor/example-vault")
     memory_dir = vault_path / ".memory"
-    memory_file = memory_dir / "memory.json"
+    memory_file = memory_dir / "chat_default.json"
     
     # Clean up previous memory
     if memory_dir.exists():
@@ -54,6 +54,7 @@ async def test_memory_plugin_integrated():
     assert brain.plugins["memory"].is_loaded
     
     # 1. Send first message (Memory should store this)
+    # Defaults to chat_id = "default" which maps to chat_default.json
     response1 = await brain.chat_send(message="My name is AutoTest")
     assert response1["status"] == "success"
     assert response1["response"] == "Hello AutoTest"
@@ -78,8 +79,9 @@ async def test_memory_plugin_integrated():
     system_prompt = messages[0]["content"]
     
     # Check if memory context is present in system prompt
-    assert "Long-term Memory:" in system_prompt
-    assert "- User: My name is AutoTest" in system_prompt
+    # User Request: "Just store", so we expect NO injection
+    assert "Long-term Memory:" not in system_prompt
+    assert "- User: My name is AutoTest" not in system_prompt
     
     # Cleanup
     await brain.shutdown()

@@ -58,9 +58,9 @@ class TestVaultBrainIntegration:
         class MockBrain(VaultBrain):
             def __init__(self):
                 self.commands = {}
-                self.subscribers = {} # Using dict/list for mock simplifiction? VaultBrain uses defaultdict(list)
-                from collections import defaultdict
-                self.subscribers = defaultdict(list)
+                self.commands = {}
+                from sidecar.event_bus import EventBus
+                self.events = EventBus()
                 
             @command("test.cmd", "core")
             async def cmd_handler(self):
@@ -79,8 +79,11 @@ class TestVaultBrainIntegration:
         assert brain.commands["test.cmd"]["plugin"] == "core"
         
         # Verify Event
-        assert "test_event" in brain.subscribers
-        assert brain.evt_handler in brain.subscribers["test_event"]
+        # Verify Event
+        assert "test_event" in brain.events._subscribers
+        # check handler in tuples
+        handlers = [h for p, h in brain.events._subscribers["test_event"]]
+        assert brain.evt_handler in handlers
 
     @pytest.mark.asyncio
     async def test_plugin_install_arg_handling(self):

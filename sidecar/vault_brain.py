@@ -123,7 +123,6 @@ class VaultBrain:
         Publish an internal Python event.
         Delegates to EventBus.
         """
-        # print(f"DEBUG: VaultBrain publishing {event}")
         await self.events.publish(event, sequential=sequential, **kwargs)
 
     async def initialize(self) -> None:
@@ -436,11 +435,18 @@ class VaultBrain:
     # =========================================================================
 
     @command("system.chat", constants.CORE_PLUGIN_NAME)
-    async def handle_chat(self, message: str = "", history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    async def handle_chat(self, message: str = "", history: List[Dict[str, str]] = None, chat_id: str = "default", **kwargs) -> Dict[str, Any]:
         if self.pipeline:
+            # Check kwargs for chat_id if not passed directly (legacy frontend support)
+            if chat_id == "default":
+                p = kwargs.get("p") or kwargs.get("params")
+                if isinstance(p, dict):
+                    chat_id = p.get("chat_id", chat_id)
+
             ctx = await self.pipeline.run(
                 message=message,
-                history=history or []
+                history=history or [],
+                metadata={"chat_id": chat_id}
             )
             return {
                 "response": ctx.response,
@@ -684,23 +690,18 @@ class VaultBrain:
                 messages.append(msg)
             messages.append({"role": "user", "content": message})
             
-            if stream:
-                # For streaming, we return immediately and stream via WebSocket events
-                # This is a simplified non-streaming response for now
-                # TODO: Implement proper streaming via WebSocket
-                pass
-            
             # Use Pipeline
+            # Ensure events are fired and plugins are triggered
             context = await self.pipeline.run(
                 message=message,
                 history=history,
                 stream=stream
             )
-            
+
             return {
                 "status": "success",
                 "response": context.response,
-                "model": "pipeline-model", # context.metadata.get("model", "unknown")
+                "model": "pipeline-model", 
                 "usage": {}
             }
         except Exception as e:

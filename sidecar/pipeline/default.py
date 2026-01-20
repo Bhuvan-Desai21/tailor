@@ -103,7 +103,8 @@ class DefaultPipeline:
         self, 
         message: str, 
         history: List[Dict[str, str]] = None,
-        stream: bool = False
+        stream: bool = False,
+        metadata: Dict[str, Any] = None
     ) -> PipelineContext:
         """
         Execute the pipeline flow via LangGraph.
@@ -112,6 +113,7 @@ class DefaultPipeline:
             message: User message
             history: Conversation history
             stream: If True, enable streaming mode (stored in metadata)
+            metadata: Additional metadata (e.g. chat_id)
             
         Returns:
             PipelineContext with response
@@ -122,6 +124,10 @@ class DefaultPipeline:
             original_message=message,
             history=history or []
         )
+        
+        # Store metadata
+        if metadata:
+            initial_state.metadata.update(metadata)
         
         # Store streaming preference in metadata
         initial_state.metadata["stream"] = stream

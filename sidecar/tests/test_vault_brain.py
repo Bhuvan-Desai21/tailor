@@ -165,8 +165,11 @@ class TestVaultBrain:
         await brain._activate_plugins()
         
         # Verify subscription
-        assert constants.CoreEvents.TICK in brain.subscribers
-        assert mock_plugin.on_tick in brain.subscribers[constants.CoreEvents.TICK]
+        # Verify subscription - accessing EventBus internals
+        assert constants.CoreEvents.TICK in brain.events._subscribers
+        # subscribers are list of (priority, handler) tuples
+        handlers = [h for p, h in brain.events._subscribers[constants.CoreEvents.TICK]]
+        assert mock_plugin.on_tick in handlers
         
         # Verify publishing event calls the plugin
         await brain.publish(constants.CoreEvents.TICK)
@@ -289,9 +292,10 @@ class TestCommandRegistry:
         async def handler(): pass
         
         brain.subscribe("test.evt", handler)
-        assert len(brain.subscribers["test.evt"]) == 1
+        # Check brain.events._subscribers
+        assert len(brain.events._subscribers["test.evt"]) == 1
         
         brain.clear_subscribers("test.evt")
-        assert len(brain.subscribers["test.evt"]) == 0
+        assert len(brain.events._subscribers["test.evt"]) == 0
 
 

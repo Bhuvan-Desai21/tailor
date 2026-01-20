@@ -38,6 +38,9 @@
         },
         "demo_plugin": {
             "enabled": false
+        },
+        "memory": {
+            "enabled": true
         }
     }
 }
