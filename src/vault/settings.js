@@ -6,6 +6,7 @@
  */
 
 import { request } from './connection.js';
+import './settings.css';
 
 // State for settings
 let providersStatus = {};
@@ -13,14 +14,19 @@ let availableModels = {};
 let categoryConfig = {};
 let categoriesInfo = {};
 
+// Navigation items configuration
+const NAV_ITEMS = [
+    { id: 'general', icon: 'settings', label: 'General' },
+    { id: 'plugins', icon: 'puzzle', label: 'Plugins' },
+    { id: 'api-keys', icon: 'key', label: 'API Keys' },
+    { id: 'models', icon: 'brain', label: 'Model Categories' }
+];
+
 /**
  * Initialize the settings button
  */
 export function initSettings() {
-    // Initialize Lucide icon for settings button
-    if (window.lucide) {
-        window.lucide.createIcons();
-    }
+    if (window.lucide) window.lucide.createIcons();
 
     const settingsBtn = document.getElementById('vault-settings-btn');
     if (!settingsBtn) return;
@@ -28,158 +34,42 @@ export function initSettings() {
     settingsBtn.addEventListener('click', async () => {
         console.log('[Settings] Opening vault settings');
 
-        // Get current vault path from URL params
         const params = new URLSearchParams(window.location.search);
         const vaultPath = params.get('vault') || params.get('path') || '';
 
         if (window.ui && window.ui.showModal) {
+            const navItemsHtml = NAV_ITEMS.map((item, idx) => `
+                <button class="settings-nav-item-modal ${idx === 0 ? 'active' : ''}" data-section="${item.id}">
+                    <i data-lucide="${item.icon}"></i>
+                    <span>${item.label}</span>
+                </button>
+            `).join('');
+
             const settingsHtml = `
-                <div class="vault-settings-modal" style="display: flex; height: 500px; gap: 0;">
-                    <div class="settings-nav-modal" style="
-                        width: 220px;
-                        background: var(--bg-secondary, #f8fafc);
-                        border-right: 1px solid var(--border-subtle);
-                        padding: 16px 12px;
-                        display: flex;
-                        flex-direction: column;
-                        gap: 4px;
-                        flex-shrink: 0;
-                    ">
-                        <div style="
-                            padding: 0 12px 12px 12px;
-                            margin-bottom: 8px;
-                            border-bottom: 1px solid var(--border-subtle);
-                            font-weight: 600;
-                            color: var(--text-primary);
-                            font-size: 0.9rem;
-                        ">
-                            Configuration
-                        </div>
-                        
-                        <button class="settings-nav-item-modal active" data-section="general" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            padding: 10px 12px;
-                            border: none;
-                            background: transparent;
-                            color: var(--text-secondary);
-                            border-radius: 6px;
-                            cursor: pointer;
-                            text-align: left;
-                            font-size: 14px;
-                            transition: all 0.2s;
-                            width: 100%;
-                            font-family: inherit;
-                        ">
-                            <i data-lucide="settings" style="width: 18px; height: 18px;"></i>
-                            <span>General</span>
-                        </button>
-                        
-                        <button class="settings-nav-item-modal" data-section="plugins" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            padding: 10px 12px;
-                            border: none;
-                            background: transparent;
-                            color: var(--text-secondary);
-                            border-radius: 6px;
-                            cursor: pointer;
-                            text-align: left;
-                            font-size: 14px;
-                            transition: all 0.2s;
-                            width: 100%;
-                            font-family: inherit;
-                        ">
-                            <i data-lucide="puzzle" style="width: 18px; height: 18px;"></i>
-                            <span>Plugins</span>
-                        </button>
-                        
-                        <button class="settings-nav-item-modal" data-section="api-keys" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            padding: 10px 12px;
-                            border: none;
-                            background: transparent;
-                            color: var(--text-secondary);
-                            border-radius: 6px;
-                            cursor: pointer;
-                            text-align: left;
-                            font-size: 14px;
-                            transition: all 0.2s;
-                            width: 100%;
-                            font-family: inherit;
-                        ">
-                            <i data-lucide="key" style="width: 18px; height: 18px;"></i>
-                            <span>API Keys</span>
-                        </button>
-                        
-                        <button class="settings-nav-item-modal" data-section="models" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            padding: 10px 12px;
-                            border: none;
-                            background: transparent;
-                            color: var(--text-secondary);
-                            border-radius: 6px;
-                            cursor: pointer;
-                            text-align: left;
-                            font-size: 14px;
-                            transition: all 0.2s;
-                            width: 100%;
-                            font-family: inherit;
-                        ">
-                            <i data-lucide="brain" style="width: 18px; height: 18px;"></i>
-                            <span>Model Categories</span>
-                        </button>
+                <div class="vault-settings-modal">
+                    <div class="settings-nav-modal">
+                        <div class="settings-nav-header">Configuration</div>
+                        ${navItemsHtml}
                     </div>
-                    
-                    <div id="settings-modal-content" style="
-                        flex: 1;
-                        padding: 24px 32px;
-                        background: var(--bg-card);
-                        overflow-y: auto;
-                    ">
-                        <h3 style="margin-top: 0; font-size: 1.25rem;">General Settings</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px;">
-                            Configure your vault settings and preferences.
-                        </p>
-                        <div style="display: flex; flex-direction: column; gap: 20px;">
-                            <div class="setting-item">
-                                <label style="display: block; font-weight: 500; margin-bottom: 8px; color: var(--text-primary);">Vault Path</label>
-                                <div style="
-                                    background: var(--bg-app); 
-                                    padding: 10px 12px; 
-                                    border: 1px solid var(--border-subtle); 
-                                    border-radius: 6px;
-                                    font-family: var(--font-mono);
-                                    font-size: 13px;
-                                    color: var(--text-secondary);
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                ">
-                                    <i data-lucide="folder" style="width: 14px; height: 14px;"></i>
-                                    ${vaultPath}
-                                </div>
-                            </div>
-                            
-                            <div style="padding-top: 12px; border-top: 1px solid var(--border-subtle);">
-                                <button class="btn btn-secondary" onclick="window.request('system.client_ready', {}); window.ui.closeModal();" style="width: fit-content;">
-                                    <i data-lucide="refresh-cw"></i>
-                                    Reload Application
-                                </button>
+                    <div id="settings-modal-content" class="settings-modal-content">
+                        <h3>General Settings</h3>
+                        <p>Configure your vault settings and preferences.</p>
+                        <div class="setting-item">
+                            <label>Vault Path</label>
+                            <div class="setting-value">
+                                <i data-lucide="folder"></i>
+                                ${vaultPath}
                             </div>
                         </div>
+                        <button class="btn btn-secondary" onclick="window.request('system.client_ready', {}); window.ui.closeModal();">
+                            <i data-lucide="refresh-cw"></i>
+                            Reload Application
+                        </button>
                     </div>
                 </div>
             `;
             window.ui.showModal('Vault Settings', settingsHtml, '850px');
 
-            // Reinitialize Lucide icons in modal
             setTimeout(() => {
                 if (window.lucide) window.lucide.createIcons();
                 setupSettingsNavigation();
@@ -194,62 +84,19 @@ export function initSettings() {
 /**
  * Setup settings navigation between sections
  */
-/**
- * Setup settings navigation between sections
- */
 function setupSettingsNavigation() {
     const navItems = document.querySelectorAll('.settings-nav-item-modal');
     const contentEl = document.getElementById('settings-modal-content');
 
     if (!navItems.length || !contentEl) return;
 
-    // Helper to update styles
-    const updateActiveState = (selectedItem) => {
-        navItems.forEach(item => {
-            const isActive = item === selectedItem;
-            item.classList.toggle('active', isActive);
-
-            // Apply active styles dynamically since we're using inline styles for the base
-            if (isActive) {
-                item.style.background = 'var(--bg-app)';
-                item.style.color = 'var(--text-primary)';
-                item.style.fontWeight = '500';
-            } else {
-                item.style.background = 'transparent';
-                item.style.color = 'var(--text-secondary)';
-                item.style.fontWeight = 'normal';
-            }
-        });
-    };
-
     navItems.forEach(item => {
-        // Add hover effect listeners manually since we're using inline styles
-        item.addEventListener('mouseenter', () => {
-            if (!item.classList.contains('active')) {
-                item.style.background = 'var(--bg-overlay, rgba(0,0,0,0.03))';
-                item.style.color = 'var(--text-primary)';
-            }
-        });
-
-        item.addEventListener('mouseleave', () => {
-            if (!item.classList.contains('active')) {
-                item.style.background = 'transparent';
-                item.style.color = 'var(--text-secondary)';
-            }
-        });
-
         item.addEventListener('click', () => {
-            updateActiveState(item);
-            const section = item.dataset.section;
-            renderSettingsSection(contentEl, section);
+            navItems.forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            renderSettingsSection(contentEl, item.dataset.section);
         });
     });
-
-    // Set initial state
-    const activeItem = document.querySelector('.settings-nav-item-modal.active');
-    if (activeItem) {
-        updateActiveState(activeItem);
-    }
 }
 
 /**

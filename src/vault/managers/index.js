@@ -6,3 +6,4 @@ export { PanelManager } from './PanelManager.js';
 export { ToolbarManager } from './ToolbarManager.js';
 export { ModalManager } from './ModalManager.js';
 export { ToolboxManager } from './ToolboxManager.js';
+export { registerAction as registerMessageAction } from '../chat/MessageActionToolbar.js';

@@ -662,9 +662,19 @@ class VaultBrain:
         history: List[Dict[str, str]] = None,
         category: str = "fast",
         stream: bool = False,
+        stream_id: str = None,
         **kwargs
     ) -> Dict[str, Any]:
-        """Send a chat message and get a response."""
+        """
+        Send a chat message and get a response.
+        
+        Args:
+            message: The user message to send
+            history: Conversation history
+            category: Model category to use (fast, thinking, etc.)
+            stream: If True, stream tokens via WebSocket events
+            stream_id: Optional ID to identify this stream (for multiple concurrent streams)
+        """
         # Handle nested params
         if not message:
             p = kwargs.get("p") or kwargs.get("params")
@@ -673,39 +683,123 @@ class VaultBrain:
                 history = p.get("history", history)
                 category = p.get("category", category)
                 stream = p.get("stream", stream)
+                stream_id = p.get("stream_id", stream_id)
         
         if not message:
             return {"status": "error", "error": "message is required"}
         
+        # Generate stream_id if streaming and not provided
+        if stream and not stream_id:
+            stream_id = utils.generate_id("stream_")
+        
         try:
-            # Build messages
-            messages = []
-            for msg in (history or []):
-                messages.append(msg)
-            messages.append({"role": "user", "content": message})
-            
             if stream:
-                # For streaming, we return immediately and stream via WebSocket events
-                # This is a simplified non-streaming response for now
-                # TODO: Implement proper streaming via WebSocket
-                pass
+                # Streaming mode: emit tokens via WebSocket events
+                return await self._stream_chat_response(
+                    message=message,
+                    history=history,
+                    category=category,
+                    stream_id=stream_id
+                )
+            else:
+                # Non-streaming mode: wait for full response
+                context = await self.pipeline.run(
+                    message=message,
+                    history=history,
+                    stream=False
+                )
+                
+                return {
+                    "status": "success",
+                    "response": context.response,
+                    "model": context.metadata.get("model", "unknown"),
+                    "usage": context.metadata.get("usage", {})
+                }
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            return {"status": "error", "error": str(e)}
+    
+    async def _stream_chat_response(
+        self,
+        message: str,
+        history: List[Dict[str, str]],
+        category: str,
+        stream_id: str
+    ) -> Dict[str, Any]:
+        """
+        Stream chat response tokens via WebSocket events.
+        
+        Emits:
+            - CHAT_STREAM_START: When streaming begins
+            - CHAT_TOKEN: For each token received
+            - CHAT_STREAM_END: When streaming completes (includes full response)
+        """
+        full_response = ""
+        
+        try:
+            # Emit stream start event
+            self.emit_to_frontend(
+                constants.EventType.CHAT_STREAM_START,
+                {
+                    "stream_id": stream_id,
+                    "message": message
+                }
+            )
             
-            # Use Pipeline
-            context = await self.pipeline.run(
+            # Use pipeline's stream_run method
+            async for token in self.pipeline.stream_run(
                 message=message,
-                history=history,
-                stream=stream
+                history=history
+            ):
+                full_response += token
+                
+                # Emit token event
+                self.emit_to_frontend(
+                    constants.EventType.CHAT_TOKEN,
+                    {
+                        "stream_id": stream_id,
+                        "token": token,
+                        "accumulated": full_response
+                    }
+                )
+            
+            # Emit stream end event with full response
+            self.emit_to_frontend(
+                constants.EventType.CHAT_STREAM_END,
+                {
+                    "stream_id": stream_id,
+                    "response": full_response,
+                    "status": "success"
+                }
             )
             
             return {
                 "status": "success",
-                "response": context.response,
-                "model": "pipeline-model", # context.metadata.get("model", "unknown")
+                "streaming": True,
+                "stream_id": stream_id,
+                "response": full_response,
+                "model": "stream-model",
                 "usage": {}
             }
+            
         except Exception as e:
-            logger.error(f"Chat error: {e}")
-            return {"status": "error", "error": str(e)}
+            logger.error(f"Stream error: {e}")
+            # Emit error event
+            self.emit_to_frontend(
+                constants.EventType.CHAT_STREAM_END,
+                {
+                    "stream_id": stream_id,
+                    "status": "error",
+                    "error": str(e),
+                    "response": full_response  # Include partial response
+                }
+            )
+            return {
+                "status": "error",
+                "streaming": True,
+                "stream_id": stream_id,
+                "error": str(e)
+            }
 
 
     @command("plugins.install", constants.CORE_PLUGIN_NAME)

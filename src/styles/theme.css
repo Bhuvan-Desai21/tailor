@@ -1,58 +1,43 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-    /* Backgrounds - Minimal Black & White with subtle grays */
-    --bg-app: #ffffff;
-    /* Main App Background - Clean white */
-    --bg-panel: #f7f7f7;
-    /* Panel Background - Subtle light gray */
-    --bg-header: #ffffff;
-    /* Header/Top Bar */
-    --bg-input: #ffffff;
-    /* Input fields - Clean white */
-    --bg-card: #f7f7f7;
-    /* Cards/Buttons - Light gray */
-    --bg-hover: #ececec;
-    /* Hover states - Slightly darker gray */
+    /* Backgrounds - Warmer, creative palette */
+    --bg-app: #fcfcfc;
+    /* Very slightly off-white */
+    --bg-panel: #ffffff;
+    --bg-header: rgba(255, 255, 255, 0.85);
+    /* Translucent */
+    --bg-input: #f8f9fa;
+    --bg-card: #ffffff;
+    --bg-hover: #f0f2f5;
     --bg-sidebar: #ffffff;
-    /* Sidebar background */
     --bg-overlay: rgba(0, 0, 0, 0.04);
-    /* Subtle overlay */
 
-    /* Text */
-    --text-primary: #0d0d0d;
-    /* Dark text - almost black */
-    --text-secondary: #565656;
-    /* Medium gray text */
-    --text-disabled: #8b8b8b;
-    /* Light gray text */
-    --text-link: #0d0d0d;
-    /* Links use primary text */
+    /* Text - Softer contrast */
+    --text-primary: #1a1a1a;
+    --text-secondary: #5e6c84;
+    --text-disabled: #97a0af;
+    --text-link: #00876c;
 
-    /* Accents */
-    --accent-primary: #10a37f;
-    /* Green (ChatGPT-like primary) */
-    --accent-secondary: #10a37f;
-    /* Green (Same as primary) */
-    --accent-error: #d32f2f;
-    /* Red (Error) */
-    --accent-warning: #f57c00;
-    /* Orange (Warning) */
-    --accent-success: #388e3c;
-    /* Green (Success) */
+    /* Accents - Vibrant yet professional */
+    --accent-primary: #00876c;
+    /* Deep Teal */
+    --accent-secondary: #00876c;
+    --accent-error: #e03131;
+    --accent-warning: #f08c00;
+    --accent-success: #2f9e44;
 
-    /* Borders */
-    --border-subtle: #d1d5db;
-    /* Light gray border */
-    --border-active: #10a37f;
-    /* Green border on focus/active */
-    --border-radius: 8px;
-    /* Rounded corners for modern look */
+    /* Borders & Depth */
+    --border-subtle: #eaecf0;
+    /* Very light */
+    --border-active: #00876c;
+    --border-radius: 12px;
+    /* Smoother curves */
     --border-width: 1px;
 
     /* Typography */
-    --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, "Courier New", monospace;
+    --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
     --font-weight-light: 300;
     --font-weight-normal: 400;
     --font-weight-medium: 500;
@@ -62,15 +47,15 @@
     /* Spacing */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
-    --spacing-md: 12px;
-    --spacing-lg: 16px;
-    --spacing-xl: 24px;
-    --spacing-2xl: 32px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-2xl: 48px;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    /* Shadows - Premium feel */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08);
 }
 
 /* Custom Scrollbars */
@@ -160,13 +145,15 @@ textarea,
 input {
     background: var(--bg-input);
     color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
-    padding: var(--spacing-md) var(--spacing-lg);
+    border: 1px solid transparent;
+    /* No border by default */
+    padding: var(--spacing-sm) var(--spacing-md);
     font-family: var(--font-main);
-    border-radius: var(--border-radius);
+    border-radius: 12px;
     outline: none;
     font-size: 14px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: inset 0 0 0 1px var(--border-subtle);
 }
 
 textarea::placeholder,
@@ -176,8 +163,8 @@ input::placeholder {
 
 textarea:focus,
 input:focus {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
+    background: #ffffff;
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
 }
 
 /* App Header (Removed) */
@@ -185,43 +172,50 @@ input:focus {
 
 /* Buttons */
 .btn {
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--border-radius);
+    padding: 10px 24px;
+    border-radius: 100px;
+    /* Pill shape */
     cursor: pointer;
-    font-size: 14px;
-    font-weight: var(--font-weight-medium);
-    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
     border: none;
     font-family: var(--font-main);
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-md);
+    justify-content: center;
+    gap: 8px;
     text-decoration: none;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
 }
 
 .btn-primary {
-    background: var(--accent-primary);
+    background: linear-gradient(135deg, var(--accent-primary), #006b5f);
     color: #ffffff;
+    box-shadow: 0 4px 10px rgba(0, 135, 108, 0.25);
 }
 
 .btn-primary:hover {
-    background: #0d8c6d;
-    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0, 135, 108, 0.35);
 }
 
 .btn-primary:active {
-    background: #0a6d56;
+    transform: translateY(0);
+    opacity: 0.9;
 }
 
 .btn-secondary {
-    background: var(--bg-card);
+    background: #ffffff;
     color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
+    box-shadow: inset 0 0 0 1px var(--border-subtle), 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .btn-secondary:hover {
     background: var(--bg-hover);
-    border-color: var(--text-secondary);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px #d0d5dd, 0 4px 8px rgba(0, 0, 0, 0.04);
 }
 
 .btn-tertiary {
@@ -231,7 +225,7 @@ input:focus {
 }
 
 .btn-tertiary:hover {
-    background: var(--bg-card);
+    background: rgba(0, 0, 0, 0.03);
     color: var(--text-primary);
 }
 
@@ -285,44 +279,98 @@ input:focus {
 }
 
 /* Golden Layout Overrides */
+/* Golden Layout Header & Tabs */
 .lm_header {
-    background: var(--bg-header) !important;
+    background: transparent !important;
+    height: 32px !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+}
+
+/* Force container to flow */
+.lm_header .lm_tabs {
+    position: relative !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: auto !important;
+    left: 0 !important;
+    height: 100% !important;
+    align-items: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 .lm_tab {
     background: transparent !important;
-    color: var(--text-secondary) !important;
+    color: var(--text-disabled) !important;
     border: none !important;
-    margin-right: 2px !important;
-    border-radius: 4px 4px 0 0 !important;
+    margin: 0 4px !important;
+    padding: 0 12px !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s;
+    font-family: var(--font-main);
+    font-weight: 500;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    width: auto !important;
+    min-width: max-content !important;
+    flex: 0 0 auto !important;
+    position: relative !important;
+    top: auto !important;
+}
+
+.lm_close_tab {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 16px !important;
+    height: 16px !important;
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    margin-left: 8px !important;
+    opacity: 0.5;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.lm_close_tab:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--accent-error);
+}
+
+.lm_title {
+    display: block !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    width: auto !important;
 }
 
 .lm_tab:hover {
-    background: var(--bg-hover) !important;
+    background: transparent !important;
     color: var(--text-primary) !important;
 }
 
 .lm_tab.lm_active {
-    background: var(--bg-panel) !important;
-    color: var(--accent-primary) !important;
-    border-top: 2px solid var(--accent-primary) !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid var(--accent-primary) !important;
+    border-top: none !important;
+    font-weight: 600;
 }
 
 .lm_content {
-    background: var(--bg-app) !important;
+    background: transparent !important;
 }
 
-.lm_splitter {
-    background: var(--bg-app) !important;
-    opacity: 0.5;
-}
-
-.lm_splitter:hover {
-    background: var(--accent-primary) !important;
-    opacity: 1;
-}
+/* Golden Layout Splitter Overrides moved to splitters.css */
 
 .lm_controls {
     display: none !important;
@@ -409,15 +457,19 @@ input:focus {
 
 /* 1. Activity Bar (Far Left) */
 .activity-bar {
-    width: 48px;
-    background: var(--bg-header);
-    border-right: 1px solid var(--border-subtle);
+    width: 72px;
+    /* Wider for elegance */
+    background: var(--bg-sidebar);
+    /* border-right: 1px solid var(--border-subtle); */
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 10px;
+    padding-top: 24px;
+    padding-bottom: 24px;
     flex-shrink: 0;
     z-index: 10;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+    /* Soft shadow */
 }
 
 .activity-action {
@@ -427,27 +479,31 @@ input:focus {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: var(--text-secondary);
-    opacity: 0.7;
-    transition: opacity 0.2s, color 0.2s;
-    border-left: 2px solid transparent;
-    /* Indicator */
+    color: var(--text-disabled);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 14px;
+    margin-bottom: 12px;
+    position: relative;
+    border: none;
 }
 
 .activity-action:hover {
-    opacity: 1;
-    color: var(--text-primary);
+    color: var(--accent-primary);
+    background: rgba(0, 135, 108, 0.05);
+    transform: translateY(-1px);
 }
 
 .activity-action.active {
-    opacity: 1;
-    color: var(--text-primary);
-    border-left-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: rgba(0, 135, 108, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 135, 108, 0.15);
+    /* Glow */
 }
 
 .activity-action svg {
     width: 24px;
     height: 24px;
+    stroke-width: 2px;
 }
 
 /* 2. Side Panel (Drawer) */

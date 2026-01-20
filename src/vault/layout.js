@@ -6,7 +6,8 @@
 
 import { GoldenLayout } from 'golden-layout';
 import 'golden-layout/dist/css/goldenlayout-base.css';
-import 'golden-layout/dist/css/themes/goldenlayout-dark-theme.css';
+import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
+import '../styles/splitters.css';
 
 /**
  * Default layout configuration
@@ -134,15 +135,23 @@ export function initLayout() {
     // Component: Controls
     myLayout.registerComponent('controls', function (container, state) {
         container.element.innerHTML = `
-            <div class="panel-container">
-                <div class="scrollable">
-                    <label class="text-label" style="display:block; margin-bottom:4px; font-weight:600;">COMMAND INPUT</label>
-                    <textarea id="cmd-input" rows="3" placeholder="demo.hello"></textarea>
-                    
-                    <label class="text-label" style="display:block; margin:8px 0 4px 0; font-weight:600;">ARGUMENTS (JSON)</label>
-                    <input id="arg-input" placeholder='{"name": "User"}'>
-                    
-                    <button id="execBtn" class="btn btn-primary" style="width:100%; margin-top:12px;">Execute Command</button>
+            <div class="panel-container" style="background: transparent; box-shadow: none; border: none;">
+                <div class="scrollable" style="padding: 16px;">
+                    <div style="background: #ffffff; border-radius: 12px; border: 1px solid var(--border-subtle); padding: 16px; box-shadow: var(--shadow-sm);">
+                        <div style="margin-bottom: 16px;">
+                            <label class="text-label" style="display:block; margin-bottom:8px; color: var(--accent-primary);">Command</label>
+                            <textarea id="cmd-input" rows="1" class="w-full" style="padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; resize: none; overflow: hidden; height: auto; min-height: 42px;" placeholder="e.g. demo.hello"></textarea>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label class="text-label" style="display:block; margin-bottom:8px; color: var(--accent-primary);">Arguments</label>
+                            <input id="arg-input" class="w-full" style="padding: 10px 12px; font-family: var(--font-mono); font-size: 13px;" placeholder='{"key": "value"}'>
+                        </div>
+                        
+                        <button id="execBtn" class="btn btn-primary w-full" style="justify-content: center;">
+                            <span style="font-weight: 700; letter-spacing: 0.05em;">EXECUTE</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;

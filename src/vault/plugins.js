@@ -6,7 +6,7 @@
  */
 
 import { request } from './connection.js';
-import { initChat } from './chat/chat.js';
+import { initChat } from './chat/index.js';
 
 const log = () => window.log || console.log;
 
@@ -129,6 +129,39 @@ export function handleEvent(evt) {
             case 'close_modal':
                 console.log('[handleEvent] Closing modal');
                 window.ui.closeModal();
+                break;
+
+            // Message Action Toolbar
+            case 'register_message_action':
+                // Legacy - auto-set location
+                console.log('[handleEvent] Registering message action (legacy):', data.id);
+                if (window.ui.registerAction) {
+                    window.ui.registerAction({
+                        id: data.id,
+                        icon: data.icon,
+                        label: data.label,
+                        position: data.position || 100,
+                        type: data.type || 'button',
+                        command: data.command,
+                        location: 'message-actionbar'
+                    });
+                }
+                break;
+
+            // Action Toolbar (new API with location support)
+            case 'register_action':
+                console.log('[handleEvent] Registering action:', data.id, 'at', data.location);
+                if (window.ui.registerAction) {
+                    window.ui.registerAction({
+                        id: data.id,
+                        icon: data.icon,
+                        label: data.label,
+                        position: data.position || 100,
+                        type: data.type || 'button',
+                        command: data.command,
+                        location: data.location || 'message-actionbar'
+                    });
+                }
                 break;
 
             // Input field control
