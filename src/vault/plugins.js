@@ -6,7 +6,7 @@
  */
 
 import { request } from './connection.js';
-import { initChat } from './chat/index.js';
+import { initChat, initChatGlobals } from './chat/index.js';
 
 const log = () => window.log || console.log;
 
@@ -28,7 +28,10 @@ export async function loadPlugins(retryCount = 0) {
         const initDelay = retryCount === 0 ? 1000 : 300;
         await new Promise(resolve => setTimeout(resolve, initDelay));
 
-        // Initialize Core Chat (always available, not a plugin)
+        // Initialize Core Chat Globals (EventListeners)
+        initChatGlobals();
+
+        // Initialize Core Chat UI (always available, not a plugin)
         const chatArea = document.getElementById('chat-area');
         if (chatArea) {
             logFn('Initializing core chat module', 'info');

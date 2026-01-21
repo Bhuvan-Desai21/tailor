@@ -98,7 +98,11 @@ function registerCoreActions() {
             try {
                 const historyUpToMessage = context?.history?.slice(0, (context?.index || 0) + 1) || [];
                 window.dispatchEvent(new CustomEvent('chat:createBranch', {
-                    detail: { branchFrom: message, history: historyUpToMessage }
+                    detail: {
+                        branchFrom: message,
+                        history: historyUpToMessage,
+                        messageId: message.id
+                    }
                 }));
                 showToast('Branch created');
             } catch (e) {

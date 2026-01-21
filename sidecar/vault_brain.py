@@ -723,7 +723,8 @@ class VaultBrain:
                     "status": "success",
                     "response": context.response,
                     "model": context.metadata.get("model", "unknown"),
-                    "usage": context.metadata.get("usage", {})
+                    "usage": context.metadata.get("usage", {}),
+                    "message_ids": context.metadata.get("generated_ids", {})
                 }
         except Exception as e:
             logger.error(f"Chat error: {e}")
@@ -780,16 +781,6 @@ class VaultBrain:
                     }
                 )
             
-            # Emit stream end event with full response
-            self.emit_to_frontend(
-                constants.EventType.CHAT_STREAM_END,
-                {
-                    "stream_id": stream_id,
-                    "response": full_response,
-                    "status": "success"
-                }
-            )
-
             # Trigger OUTPUT event for plugins (like Memory) to capture the interaction
             # We need to reconstruct a PipelineContext
             from .pipeline.types import PipelineContext
@@ -805,7 +796,19 @@ class VaultBrain:
             if chat_id:
                 ctx.metadata["chat_id"] = chat_id
             
+            # Await OUTPUT sequentially to ensure IDs are generated
             await self.publish(PipelineEvents.OUTPUT, sequential=True, ctx=ctx)
+            
+            # Emit stream end event with full response AND generated IDs
+            self.emit_to_frontend(
+                constants.EventType.CHAT_STREAM_END,
+                {
+                    "stream_id": stream_id,
+                    "response": full_response,
+                    "status": "success",
+                    "message_ids": ctx.metadata.get("generated_ids", {})
+                }
+            )
             
             return {
                 "status": "success",
@@ -813,7 +816,8 @@ class VaultBrain:
                 "stream_id": stream_id,
                 "response": full_response,
                 "model": "stream-model",
-                "usage": {}
+                "usage": {},
+                "message_ids": ctx.metadata.get("generated_ids", {})
             }
             
         except Exception as e:

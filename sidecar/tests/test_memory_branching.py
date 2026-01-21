@@ -40,6 +40,7 @@ async def test_memory_branching():
     
     await brain.initialize()
     brain._llm_service = mock_llm
+    # Patch the module level service if needed (depending on implementation)
     import sidecar.services.llm_service as llm_module
     llm_module._llm_service = mock_llm
     
@@ -50,52 +51,75 @@ async def test_memory_branching():
     # Verify file
     with open(memory_file, "r") as f:
         data = json.load(f)
-    assert data["active_branch"] == "main"
-    assert len(data["branches"]["main"]) == 2
     
-    # 2. Create Branch from index 0 (User Msg 1)
-    # Note: History index 0 is User Msg 1. Index 1 is Response 1.
-    # If we branch from 0, we keep Msg 1. We drop Response 1?
-    # Logic in code: new_history = current_history[:message_index+1]
-    # If index=0, we keep item 0.
+    root_id = data["active_branch"]
+    root_branch = data["branches"][root_id]
+    
+    assert root_branch["display_name"] == "Main"
+    assert len(root_branch["messages"]) == 2
+    
+    msg1_id = root_branch["messages"][0]["id"]
+    
+    # 2. Create Branch from msg1 (The User Message at index 0)
+    # This should split the root branch after msg1 (truncating Response 1)
+    # But wait, msg1 is index 0. Response 1 is index 1.
+    # If we branch from msg1, we keep msg1. Response 1 is 'future'.
+    # V3 Logic:
+    # Root becomes [Msg 1].
+    # Continuation becomes [Response 1] (parented to Root).
+    # New Branch becomes [] (parented to Root).
+    
     result = await brain.execute_command("memory.create_branch", 
         chat_id=chat_id, 
-        message_index=0, 
+        message_id=msg1_id, 
         name="experiment_a"
     )
     
     assert result["status"] == "success"
-    assert result["branch"] == "experiment_a"
-    assert len(result["history"]) == 1
-    assert result["history"][0]["content"] == "Msg 1"
+    new_branch_id = result["branch"]
     
     # Verify file updated
     with open(memory_file, "r") as f:
         data = json.load(f)
-    assert data["active_branch"] == "experiment_a"
-    assert "experiment_a" in data["branches"]
-    assert len(data["branches"]["experiment_a"]) == 1
+        
+    assert data["active_branch"] == new_branch_id
+    
+    # Verify Root Split
+    root_branch = data["branches"][root_id]
+    assert len(root_branch["messages"]) == 1 # Just Msg 1
+    assert root_branch["messages"][0]["id"] == msg1_id
+    
+    # Verify New Branch
+    new_branch = data["branches"][new_branch_id]
+    assert new_branch["display_name"] == "experiment_a"
+    assert new_branch["parent_branch"] == root_id
+    assert len(new_branch["messages"]) == 0
+    
+    # Verify Continuation Branch (Implicitly created)
+    # Search for branch with parent=root_id and NOT new_branch
+    continuation_branch = None
+    for bid, b in data["branches"].items():
+        if b["parent_branch"] == root_id and bid != new_branch_id:
+            continuation_branch = b
+            break
+            
+    assert continuation_branch is not None
+    assert len(continuation_branch["messages"]) == 1
+    assert continuation_branch["messages"][0]["content"] == "Response 1"
     
     # 3. Continue Chat on New Branch
-    # User sends Msg 2 (which is arguably redundant context wise if we are just testing storage, but pipeline will run)
-    # Actually, if we are in a branch, next chat_send should append to it.
+    # User sends Msg 2
     await brain.chat_send(message="Msg 2", chat_id=chat_id)
     
     # Verify file
     with open(memory_file, "r") as f:
         data = json.load(f)
         
-    branch_hist = data["branches"]["experiment_a"]
-    # Should have: Msg 1, Msg 2, Response 2
-    assert len(branch_hist) == 3
-    assert branch_hist[0]["content"] == "Msg 1"
-    assert branch_hist[1]["content"] == "Msg 2"
-    assert branch_hist[2]["content"] == "Response 2"
-    
-    # Verify Main Branch Unchanged
-    main_hist = data["branches"]["main"]
-    assert len(main_hist) == 2
-    assert main_hist[1]["content"] == "Response 1"
+    new_branch = data["branches"][new_branch_id]
+    # Should have: Msg 2, Response 2
+    assert len(new_branch["messages"]) == 2
+    assert new_branch["messages"][0]["content"] == "Msg 2"
+    assert new_branch["messages"][1]["content"] == "Response 2"
     
     # Cleanup
     await brain.shutdown()

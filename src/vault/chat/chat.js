@@ -10,6 +10,7 @@ import { createToolbar, registerAction, refreshComposerToolbar } from './Message
 
 // Chat state
 let conversationHistory = [];
+let branchesMetadata = {}; // Metadata for branch navigation
 let isWaitingForResponse = false;
 let currentCategory = 'fast';
 let messageIdCounter = 0;
@@ -21,7 +22,23 @@ let activeStreamElement = null;
 let enableStreaming = true; // Toggle streaming mode
 
 /**
- * Initialize the chat module
+ * Initialize global chat listeners (run once)
+ */
+export function initChatGlobals() {
+    if (window.__chatGlobalsInitialized) return;
+
+    // Setup chat event listeners for toolbar actions
+    setupToolbarEventListeners();
+
+    // Setup streaming event listeners
+    setupStreamEventListeners();
+
+    window.__chatGlobalsInitialized = true;
+    console.log('[Chat] Global listeners initialized');
+}
+
+/**
+ * Initialize the chat module (DOM encapsulation)
  */
 export function initChat(containerEl) {
     if (!containerEl) {
@@ -34,12 +51,6 @@ export function initChat(containerEl) {
 
     // Bind events
     bindEvents(containerEl);
-
-    // Setup chat event listeners for toolbar actions
-    setupToolbarEventListeners();
-
-    // Setup streaming event listeners
-    setupStreamEventListeners();
 
     // Initialize composer toolbar with registered actions
     refreshComposerToolbar();
@@ -78,20 +89,14 @@ async function loadHistory(chatId) {
         const result = res.result || {};
         if (result.status === 'success') {
             conversationHistory = result.history || [];
+            branchesMetadata = result.branches || {};
 
             // Clear current messages
             const messagesEl = document.getElementById('chat-messages');
-            if (messagesEl) messagesEl.innerHTML = '';
+            if (messagesEl) messagesEl.innerHTML = ''; // Redundant but safe
 
-            // Render basic system message if empty, or render history
-            if (conversationHistory.length === 0) {
-                addSystemMessage('Welcome! Type a message to start chatting.', 'welcome-message');
-            } else {
-                conversationHistory.forEach((msg, idx) => {
-                    const msgEl = addMessage(msg.role, msg.content);
-                    if (msgEl) msgEl.dataset.messageIndex = idx;
-                });
-            }
+            renderConversation(conversationHistory);
+
             setStatus('Ready');
         } else {
             console.warn('[Chat] Failed to load history:', result.error);
@@ -261,7 +266,7 @@ async function sendMessage() {
     }
 
     // Add user message to UI
-    addMessage('user', message);
+    const userMsgEl = addMessage('user', message);
 
     // Add to history
     conversationHistory.push({ role: 'user', content: message });
@@ -306,9 +311,26 @@ async function sendMessage() {
 
             // For streaming, the response is already shown via events
             // For non-streaming, update the message now
+            // For non-streaming, update the message now
             if (!enableStreaming || !result.streaming) {
                 updateMessage(assistantMsgEl, response);
                 conversationHistory.push({ role: 'assistant', content: response });
+
+                // Update IDs from backend response
+                if (result.message_ids) {
+                    const { user_message_id, assistant_message_id } = result.message_ids;
+
+                    // Update DOM
+                    if (userMsgEl) userMsgEl.dataset.messageId = user_message_id;
+                    if (assistantMsgEl) assistantMsgEl.dataset.messageId = assistant_message_id;
+
+                    // Update History
+                    const histLen = conversationHistory.length;
+                    if (histLen >= 2) {
+                        conversationHistory[histLen - 2].id = user_message_id;
+                        conversationHistory[histLen - 1].id = assistant_message_id;
+                    }
+                }
             }
             // Note: For streaming mode, history is updated in handleStreamEnd
 
@@ -539,49 +561,78 @@ function setupToolbarEventListeners() {
 
     // Handle create branch
     window.addEventListener('chat:createBranch', async (e) => {
-        const { branchFrom, history } = e.detail;
+        const { branchFrom, history, messageId } = e.detail;
 
         if (!activeChatId) {
             console.error('[Chat] Cannot branch: No active chat ID');
             return;
         }
 
-        // Calculate index of the message we are branching from
-        // The 'history' in detail includes up to the message, so index is length-1
-        const messageIndex = history.length - 1;
-
         try {
             setStatus('Branching...');
 
-            // Call backend to create branch
+            // Call backend to create branch using Message ID (V3)
             const res = await request('memory.create_branch', {
                 chat_id: activeChatId,
-                message_index: messageIndex
+                message_id: messageId // V3 linking
             });
 
             const result = res.result || {};
 
             if (result.status === 'success') {
+                // ... (inside createBranch handler)
                 // Update local state with backend source of truth
                 conversationHistory = result.history || [];
 
-                const messagesEl = document.getElementById('chat-messages');
-                if (messagesEl) {
-                    messagesEl.innerHTML = '';
-                }
-
                 addSystemMessage(`Switched to branch: "${result.branch}"`);
 
-                // Re-render messages
-                conversationHistory.forEach((msg, idx) => {
-                    const msgEl = addMessage(msg.role, msg.content);
-                    if (msgEl) {
-                        msgEl.dataset.messageIndex = idx;
-                    }
-                });
+                // Re-render messages using helper
+                renderConversation(conversationHistory);
 
                 setStatus('Ready');
             } else {
+                // ...
+
+                /**
+                 * Render conversation history with branch dividers
+                 */
+                function renderConversation(history) {
+                    const messagesEl = document.getElementById('chat-messages');
+                    if (messagesEl) {
+                        messagesEl.innerHTML = '';
+                    }
+
+                    if (!history || history.length === 0) {
+                        addSystemMessage('Welcome! Type a message to start chatting.', 'welcome-message');
+                        return;
+                    }
+
+                    let lastBranchId = null;
+
+                    history.forEach((msg, idx) => {
+                        // Check for branch change
+                        if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
+                            // Visual divider with click interaction
+                            // Using system message styling but with distinct content
+                            const dividerId = msg.source_branch.substring(0, 8);
+                            addSystemMessage(
+                                `<div class="branch-divider-content" data-branch-id="${msg.source_branch}" style="cursor: pointer; opacity:0.7; font-size: 0.8em;">
+                    <i data-lucide="git-branch" style="vertical-align: middle; width: 14px;"></i> 
+                    Branch: ${dividerId} <span style="opacity: 0.5">(Click to switch)</span>
+                  </div>`,
+                                'branch-divider'
+                            );
+                        }
+
+                        if (msg.source_branch) lastBranchId = msg.source_branch;
+
+                        const msgEl = addMessage(msg.role, msg.content);
+                        if (msgEl) {
+                            msgEl.dataset.messageIndex = idx;
+                            if (msg.id) msgEl.dataset.messageId = msg.id;
+                        }
+                    });
+                }
                 console.error('[Chat] Branch error:', result.error);
                 addSystemMessage(`Failed to create branch: ${result.error}`, 'chat-message-error');
                 setStatus('Error');
@@ -640,7 +691,11 @@ function setupToolbarEventListeners() {
             if (result.status === 'success') {
                 const response = result.response || 'No response';
                 updateMessage(assistantMsgEl, response);
-                conversationHistory.push({ role: 'assistant', content: response });
+
+                // Reload history to ensure we have valid UUIDs from backend
+                // This prevents "Message ID not found" errors when branching immediately
+                await loadHistory(activeChatId);
+
                 setStatus('Ready');
             } else {
                 const error = result.error || 'Unknown error';
@@ -680,7 +735,7 @@ function setupStreamEventListeners() {
     });
 
     // Handle stream end event
-    window.addEventListener('CHAT_STREAM_END', (e) => {
+    window.addEventListener('CHAT_STREAM_END', async (e) => {
         const { stream_id, response, status, error } = e.detail || {};
 
         // Verify this is for the active stream
@@ -692,10 +747,36 @@ function setupStreamEventListeners() {
             // Final update with full response
             updateMessage(activeStreamElement, response);
 
-            // Add to conversation history
-            conversationHistory.push({ role: 'assistant', content: response });
+            // Update IDs if provided
+            const messageIds = e.detail?.message_ids;
+            if (messageIds) {
+                const { user_message_id, assistant_message_id } = messageIds;
 
-            setStatus('Ready');
+                // Update Assistant DOM
+                if (activeStreamElement) activeStreamElement.dataset.messageId = assistant_message_id;
+
+                // Update User DOM (find last user message)
+                const allUserMsgs = document.querySelectorAll('.chat-message-user');
+                const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
+                if (lastUserMsg) lastUserMsg.dataset.messageId = user_message_id;
+
+                // Update History (Push assistant msg, update user msg ID)
+                // Note: sendMessage did NOT push assistant msg yet for streaming
+                conversationHistory.push({
+                    role: 'assistant',
+                    content: response,
+                    id: assistant_message_id
+                });
+
+                const lastUserIdx = conversationHistory.length - 2;
+                if (lastUserIdx >= 0) conversationHistory[lastUserIdx].id = user_message_id;
+
+                setStatus('Ready');
+            } else {
+                // Fallback: Reload history to ensure we have valid UUIDs from backend
+                await loadHistory(activeChatId);
+                setStatus('Ready');
+            }
         } else if (status === 'error') {
             updateMessage(activeStreamElement, `Error: ${error}`, true);
             setStatus('Error');
@@ -746,6 +827,169 @@ function reindexMessages() {
 export function setStreaming(enabled) {
     enableStreaming = enabled;
     console.log(`[Chat] Streaming mode: ${enabled ? 'enabled' : 'disabled'}`);
+}
+
+/**
+ * Render conversation history with branch tabs
+ */
+function renderConversation(history) {
+    const messagesEl = document.getElementById('chat-messages');
+    if (messagesEl) {
+        messagesEl.innerHTML = '';
+    }
+
+    if (!history || history.length === 0) {
+        addSystemMessage('Welcome! Type a message to start chatting.', 'welcome-message');
+        return;
+    }
+
+    let lastBranchId = null;
+
+    history.forEach((msg, idx) => {
+        // Check for branch change
+        if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
+            const currentBranch = branchesMetadata[msg.source_branch];
+
+            // If we have metadata, show tabbed interface
+            if (currentBranch) {
+                const siblings = Object.values(branchesMetadata).filter(b =>
+                    b.parent_branch === currentBranch.parent_branch
+                );
+
+                // Sort: Put current first? or alphabetical? or by creation?
+                // Simple sort by ID for stability
+                siblings.sort((a, b) => a.id.localeCompare(b.id));
+
+                const tabsHtml = siblings.map(b => {
+                    const isActive = b.id === msg.source_branch;
+                    const name = b.display_name || b.id.substring(0, 8);
+
+                    // Inline styles for tabs
+                    const bg = isActive ? 'var(--color-accent, #3b82f6)' : 'rgba(255,255,255,0.1)';
+                    const color = isActive ? 'white' : 'var(--text-muted, #888)';
+                    const cursor = isActive ? 'default' : 'pointer';
+                    const border = isActive ? '1px solid transparent' : '1px solid rgba(255,255,255,0.1)';
+
+                    return `
+                        <button 
+                            onclick="window.dispatchEvent(new CustomEvent('chat:switchBranch', { detail: { branchId: '${b.id}' } }))"
+                            style="
+                                background: ${bg};
+                                color: ${color};
+                                border: ${border};
+                                border-radius: 4px;
+                                padding: 2px 8px;
+                                margin-right: 4px;
+                                font-size: 0.8em;
+                                cursor: ${cursor};
+                            "
+                            title="ID: ${b.id}"
+                            ${isActive ? 'disabled' : ''}
+                        >
+                            <i data-lucide="git-branch" style="width:12px; vertical-align:middle; margin-right:2px;"></i>
+                            ${escapeHtml(name)}
+                        </button>
+                     `;
+                }).join('');
+
+                addSystemMessage(
+                    `<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px;">
+                        ${tabsHtml}
+                      </div>`,
+                    'branch-divider'
+                );
+            } else {
+                // Fallback if no metadata
+                const dividerId = msg.source_branch.substring(0, 8);
+                addSystemMessage(`<div>Branch: ${dividerId}</div>`, 'branch-divider');
+            }
+        }
+
+        if (msg.source_branch) lastBranchId = msg.source_branch;
+
+        const msgEl = addMessage(msg.role, msg.content);
+        if (msgEl) {
+            msgEl.dataset.messageIndex = idx;
+            if (msg.id) msgEl.dataset.messageId = msg.id;
+        }
+    });
+
+    // Check for children at the end (Forward Navigation)
+    // This handles the case where we are viewing a Parent branch and need to see valid next steps
+    if (lastBranchId && branchesMetadata[lastBranchId]) {
+        const children = Object.values(branchesMetadata).filter(b =>
+            b.parent_branch === lastBranchId
+        );
+
+        if (children.length > 0) {
+            // Sort by creation/ID
+            children.sort((a, b) => a.id.localeCompare(b.id));
+
+            const tabsHtml = children.map(b => {
+                const name = b.display_name || b.id.substring(0, 8);
+
+                return `
+                    <button 
+                        onclick="window.dispatchEvent(new CustomEvent('chat:switchBranch', { detail: { branchId: '${b.id}' } }))"
+                        style="
+                            background: rgba(255,255,255,0.1);
+                            color: var(--text-muted, #888);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            border-radius: 4px;
+                            padding: 2px 8px;
+                            margin-right: 4px;
+                            font-size: 0.8em;
+                            cursor: pointer;
+                        "
+                        title="ID: ${b.id}"
+                    >
+                        <i data-lucide="git-branch" style="width:12px; vertical-align:middle; margin-right:2px;"></i>
+                        ${escapeHtml(name)}
+                    </button>
+                 `;
+            }).join('');
+
+            addSystemMessage(
+                `<div style="display: flex; direction: column; gap: 4px;">
+                    <div style="font-size: 0.8em; opacity: 0.7; margin-bottom: 4px;">Branched paths:</div>
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px;">
+                        ${tabsHtml}
+                    </div>
+                </div>`,
+                'branch-divider'
+            );
+        }
+    }
+}
+
+// Global listener for branch switching
+window.addEventListener('chat:switchBranch', async (e) => {
+    const { branchId } = e.detail;
+    await switchToBranch(branchId);
+});
+
+async function switchToBranch(branchId) {
+    if (!activeChatId) return;
+    setStatus('Switching...');
+    try {
+        const res = await request('memory.switch_branch', {
+            chat_id: activeChatId,
+            branch: branchId
+        });
+
+        const result = res.result || {};
+        if (result.status === 'success') {
+            // Reload full history to get fresh metadata (in case of new branches)
+            await loadHistory(activeChatId);
+            setStatus('Ready');
+        } else {
+            addSystemMessage(`Failed to switch: ${result.error}`, 'chat-message-error');
+            setStatus('Error');
+        }
+    } catch (e) {
+        setStatus('Error');
+        console.error(e);
+    }
 }
 
 /**

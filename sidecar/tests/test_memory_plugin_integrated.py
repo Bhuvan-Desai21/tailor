@@ -53,60 +53,60 @@ async def test_memory_plugin_integrated():
     assert "memory" in brain.plugins
     assert brain.plugins["memory"].is_loaded
     
-    # 1. Send first message (Memory should store this)
-    # Provide chat_id to ensure we use chat_default.json
-    response1 = await brain.chat_send(message="My name is AutoTest", chat_id="chat_default")
+    # 1. Send first message
+    response1 = await brain.chat_send(message="Msg A", chat_id="chat_v3_test")
     assert response1["status"] == "success"
-    assert response1["response"] == "Hello AutoTest"
     
-    # Verify memory file created
-    assert memory_file.exists()
-    with open(memory_file, "r") as f:
+    # 2. Send second message
+    response2 = await brain.chat_send(message="Msg B", chat_id="chat_v3_test")
+    
+    # 3. Send third message
+    response3 = await brain.chat_send(message="Msg C", chat_id="chat_v3_test")
+
+    # Verify ID existence in file
+    chat_file = memory_dir / "chat_v3_test.json"
+    with open(chat_file, "r") as f:
         data = json.load(f)
-    
-    # Handle V2 schema
-    if isinstance(data, dict) and "branches" in data:
-        active_branch = data.get("active_branch", "main")
-        memories = data["branches"][active_branch]
-    else:
-        memories = data
         
-    # Expect 2 messages: User + Assistant
-    assert len(memories) == 2
-    assert memories[0]["role"] == "user"
-    assert memories[0]["content"] == "My name is AutoTest"
-    assert "time_marker" in memories[0]
-    assert memories[1]["role"] == "assistant"
-    assert memories[1]["content"] == "Hello AutoTest"
-    assert "time_marker" in memories[1]
+    main_branch_id = data["active_branch"]
+    main_branch = data["branches"][main_branch_id]
+    msgs = main_branch["messages"]
+    assert len(msgs) == 6 # 3 user + 3 assistant
+    msg_b_id = msgs[3]["id"] # 0=A_user, 1=A_asst, 2=B_user, 3=B_asst (This is B)
     
-    # 2. Send second message (Memory should inject context)
-    response2 = await brain.chat_send(message="What is my name?", chat_id="chat_default")
-    assert response2["response"] == "Your name is AutoTest"
+    # 4. Branch from B (Assistant response) - effectively splitting before C
+    # Message Index 3 is B_assistant.
+    # Total len is 6. Index 3 is middle.
     
-    # Verify LLM call arguments to check for injected context
-    # Get the LAST call arguments
-    call_args = mock_llm.complete.call_args
-    # messages is the first arg (or keyword 'messages')
-    messages = call_args.kwargs.get("messages")
-    system_prompt = messages[0]["content"]
+    branch_res = await brain.execute_command("memory.create_branch", chat_id="chat_v3_test", message_id=msg_b_id, name="split_branch")
+    assert branch_res["status"] == "success"
     
-    # Check if memory context is present in system prompt
-    # Now we EXPECT injection because we are using the backend memory
-    # Note: The exact format depends on how the pipeline constructs context from history
-    # Typically it appends history messages to the messages list, NOT the system prompt.
-    # Let's check the messages list structure.
+    # Reload file to check Split
+    with open(chat_file, "r") as f:
+        data_split = json.load(f)
+        
+    # MAIN BRANCH (The Root): Should be truncated up to B_asst
+    main_msgs = data_split["branches"][main_branch_id]["messages"]
+    assert len(main_msgs) == 4
+    assert main_msgs[-1]["id"] == msg_b_id
     
-    # The pipeline.run combines history + new message.
-    # So 'messages' passed to llm.complete should contain:
-    # System, User(My name is...), Assistant(Hello...), User(What is my name?)
+    # CONTINUATION BRANCH: Should have [C_user, C_asst]
+    # Find the branch that has parent=main_branch_id and parent_msg_id=msg_b_id AND has messages
+    continuation = None
+    for bid, b in data_split["branches"].items():
+        if b.get("parent_branch") == main_branch_id and b.get("parent_message_id") == msg_b_id and len(b["messages"]) > 0:
+            continuation = b
+            break
+            
+    assert continuation is not None
+    assert len(continuation["messages"]) == 2 # C_user, C_asst
     
-    assert len(messages) >= 4
-    assert messages[1]["role"] == "user"
-    assert messages[1]["content"] == "My name is AutoTest"
-    assert messages[2]["role"] == "assistant"
-    assert messages[2]["content"] == "Hello AutoTest"
-    
+    # NEW BRANCH: Should be empty
+    new_branch = data_split["branches"]["split_branch"]
+    assert len(new_branch["messages"]) == 0
+    assert new_branch["parent_branch"] == main_branch_id
+    assert new_branch["parent_message_id"] == msg_b_id
+
     # Cleanup
     await brain.shutdown()
     if memory_dir.exists():
