@@ -312,11 +312,9 @@ async function sendMessage() {
             // For streaming, the response is already shown via events
             // For non-streaming, update the message now
             // For non-streaming, update the message now
+            // For non-streaming, update the message now
             if (!enableStreaming || !result.streaming) {
-                updateMessage(assistantMsgEl, response);
-                conversationHistory.push({ role: 'assistant', content: response });
-
-                // Update IDs from backend response
+                // Update IDs from backend response FIRST
                 if (result.message_ids) {
                     const { user_message_id, assistant_message_id } = result.message_ids;
 
@@ -331,6 +329,10 @@ async function sendMessage() {
                         conversationHistory[histLen - 1].id = assistant_message_id;
                     }
                 }
+
+                // Then update content (which creates toolbar with correct ID)
+                updateMessage(assistantMsgEl, response);
+                conversationHistory.push({ role: 'assistant', content: response });
             }
             // Note: For streaming mode, history is updated in handleStreamEnd
 
@@ -744,10 +746,7 @@ function setupStreamEventListeners() {
         }
 
         if (status === 'success') {
-            // Final update with full response
-            updateMessage(activeStreamElement, response);
-
-            // Update IDs if provided
+            // Update IDs if provided FIRST
             const messageIds = e.detail?.message_ids;
             if (messageIds) {
                 const { user_message_id, assistant_message_id } = messageIds;
@@ -761,22 +760,26 @@ function setupStreamEventListeners() {
                 if (lastUserMsg) lastUserMsg.dataset.messageId = user_message_id;
 
                 // Update History (Push assistant msg, update user msg ID)
-                // Note: sendMessage did NOT push assistant msg yet for streaming
+                const lastUserIdx = conversationHistory.length - 1; // User message is last in history currently
+                if (lastUserIdx >= 0 && conversationHistory[lastUserIdx].role === 'user') {
+                    conversationHistory[lastUserIdx].id = user_message_id;
+                }
+
                 conversationHistory.push({
                     role: 'assistant',
                     content: response,
                     id: assistant_message_id
                 });
+            }
 
-                const lastUserIdx = conversationHistory.length - 2;
-                if (lastUserIdx >= 0) conversationHistory[lastUserIdx].id = user_message_id;
+            // Final update with full response (creates toolbar)
+            updateMessage(activeStreamElement, response);
 
-                setStatus('Ready');
-            } else {
+            if (!messageIds) {
                 // Fallback: Reload history to ensure we have valid UUIDs from backend
                 await loadHistory(activeChatId);
-                setStatus('Ready');
             }
+            setStatus('Ready');
         } else if (status === 'error') {
             updateMessage(activeStreamElement, `Error: ${error}`, true);
             setStatus('Error');
