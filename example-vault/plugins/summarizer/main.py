@@ -123,20 +123,33 @@ class Plugin(PluginBase):
         safe_id = "".join(x for x in chat_id if x.isalnum() or x in "-_")
         return self.memory_dir / f"{safe_id}.json"
     
-    def _load_memory(self, chat_id: str) -> list:
+    def _load_memory(self, chat_id: str) -> tuple[Any, list]:
+        """Load memory, handling both legacy (list) and v2 (dict) formats."""
         f = self._get_memory_file(chat_id)
         if f.exists():
             try:
-                return json.loads(f.read_text(encoding="utf-8"))
+                data = json.loads(f.read_text(encoding="utf-8"))
+                
+                # Check for V2 format
+                if isinstance(data, dict) and "branches" in data and "active_branch" in data:
+                    active_branch = data.get("active_branch", "main")
+                    branches = data.get("branches", {})
+                    return data, branches.get(active_branch, [])
+                
+                # Legacy format
+                if isinstance(data, list):
+                    return data, data
+                
+                return data, []
             except Exception as e:
                 self.logger.error(f"Failed to load memory: {e}")
-        return []
+        return [], []
     
-    def _save_memory(self, chat_id: str, memory: list) -> bool:
+    def _save_memory(self, chat_id: str, data: Any) -> bool:
         try:
             self.memory_dir.mkdir(parents=True, exist_ok=True)
             self._get_memory_file(chat_id).write_text(
-                json.dumps(memory, indent=2), encoding="utf-8"
+                json.dumps(data, indent=2), encoding="utf-8"
             )
             return True
         except Exception as e:
@@ -178,9 +191,9 @@ class Plugin(PluginBase):
         
         # Check for cached summary
         if chat_id and message_index >= 0:
-            memory = self._load_memory(chat_id)
-            if message_index < len(memory):
-                existing = memory[message_index].get("summary")
+            full_data, memory_list = self._load_memory(chat_id)
+            if message_index < len(memory_list):
+                existing = memory_list[message_index].get("summary")
                 if existing:
                     self._inject_summary_html(message_id, message_index, chat_id, 
                                                existing["tldr"], existing["full"])
@@ -216,10 +229,10 @@ class Plugin(PluginBase):
                 
                 # Save to memory
                 if chat_id and message_index >= 0:
-                    memory = self._load_memory(chat_id)
-                    if message_index < len(memory):
-                        memory[message_index]["summary"] = {"tldr": tldr, "full": full}
-                        self._save_memory(chat_id, memory)
+                    full_data, memory_list = self._load_memory(chat_id)
+                    if message_index < len(memory_list):
+                        memory_list[message_index]["summary"] = {"tldr": tldr, "full": full}
+                        self._save_memory(chat_id, full_data)
                 
                 # Inject UI
                 self._inject_summary_html(message_id, message_index, chat_id, tldr, full)
@@ -252,10 +265,10 @@ class Plugin(PluginBase):
                                       chat_id: str = "", **kwargs) -> Dict[str, Any]:
         """Delete a summary."""
         if chat_id and message_index >= 0:
-            memory = self._load_memory(chat_id)
-            if message_index < len(memory) and "summary" in memory[message_index]:
-                del memory[message_index]["summary"]
-                self._save_memory(chat_id, memory)
+            full_data, memory_list = self._load_memory(chat_id)
+            if message_index < len(memory_list) and "summary" in memory_list[message_index]:
+                del memory_list[message_index]["summary"]
+                self._save_memory(chat_id, full_data)
         
         self.brain.emit_to_frontend(
             event_type=EventType.UI_COMMAND,
@@ -270,19 +283,19 @@ class Plugin(PluginBase):
         if not chat_id or message_index < 0:
             return {"status": "error", "message": "Invalid parameters"}
         
-        memory = self._load_memory(chat_id)
-        if message_index >= len(memory):
+        full_data, memory_list = self._load_memory(chat_id)
+        if message_index >= len(memory_list):
             return {"status": "error", "message": "Not found"}
         
-        summary = memory[message_index].get("summary")
+        summary = memory_list[message_index].get("summary")
         if not summary:
             return {"status": "error", "message": "No summary"}
         
         text = f"TL;DR: {summary['tldr']}\n\n{summary['full']}"
-        memory[message_index]["original_content"] = memory[message_index].get("content", "")
-        memory[message_index]["content"] = text
-        del memory[message_index]["summary"]
-        self._save_memory(chat_id, memory)
+        memory_list[message_index]["original_content"] = memory_list[message_index].get("content", "")
+        memory_list[message_index]["content"] = text
+        del memory_list[message_index]["summary"]
+        self._save_memory(chat_id, full_data)
         
         safe_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
         self.brain.emit_to_frontend(

@@ -92,9 +92,20 @@ async def test_memory_plugin_integrated():
     system_prompt = messages[0]["content"]
     
     # Check if memory context is present in system prompt
-    # User Request: "Just store", so we expect NO injection
-    assert "Long-term Memory:" not in system_prompt
-    assert "- User: My name is AutoTest" not in system_prompt
+    # Now we EXPECT injection because we are using the backend memory
+    # Note: The exact format depends on how the pipeline constructs context from history
+    # Typically it appends history messages to the messages list, NOT the system prompt.
+    # Let's check the messages list structure.
+    
+    # The pipeline.run combines history + new message.
+    # So 'messages' passed to llm.complete should contain:
+    # System, User(My name is...), Assistant(Hello...), User(What is my name?)
+    
+    assert len(messages) >= 4
+    assert messages[1]["role"] == "user"
+    assert messages[1]["content"] == "My name is AutoTest"
+    assert messages[2]["role"] == "assistant"
+    assert messages[2]["content"] == "Hello AutoTest"
     
     # Cleanup
     await brain.shutdown()

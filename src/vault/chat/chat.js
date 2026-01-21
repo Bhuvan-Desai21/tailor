@@ -54,7 +54,53 @@ export function initChat(containerEl) {
         }
     }, 50);
 
+    // Try to load history if chat ID is available
+    if (window.activeChatId || activeChatId) {
+        if (!activeChatId) activeChatId = window.activeChatId;
+        loadHistory(activeChatId);
+    }
+
     console.log('[Chat] Core chat module initialized');
+}
+
+/**
+ * Load history from backend
+ */
+async function loadHistory(chatId) {
+    if (!chatId) return;
+
+    try {
+        setStatus('Loading history...');
+        const res = await request('memory.get_chat_history', {
+            chat_id: chatId
+        });
+
+        const result = res.result || {};
+        if (result.status === 'success') {
+            conversationHistory = result.history || [];
+
+            // Clear current messages
+            const messagesEl = document.getElementById('chat-messages');
+            if (messagesEl) messagesEl.innerHTML = '';
+
+            // Render basic system message if empty, or render history
+            if (conversationHistory.length === 0) {
+                addSystemMessage('Welcome! Type a message to start chatting.', 'welcome-message');
+            } else {
+                conversationHistory.forEach((msg, idx) => {
+                    const msgEl = addMessage(msg.role, msg.content);
+                    if (msgEl) msgEl.dataset.messageIndex = idx;
+                });
+            }
+            setStatus('Ready');
+        } else {
+            console.warn('[Chat] Failed to load history:', result.error);
+            setStatus('Ready');
+        }
+    } catch (e) {
+        console.error('[Chat] History load error:', e);
+        setStatus('Error loading history');
+    }
 }
 
 /**
@@ -246,7 +292,7 @@ async function sendMessage() {
     try {
         const res = await request('chat.send', {
             message: message,
-            history: conversationHistory.slice(0, -1), // Exclude the just-added message
+            history: [], // Backend manages history now
             category: currentCategory,
             stream: enableStreaming,
             stream_id: streamId,

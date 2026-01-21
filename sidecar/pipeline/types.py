@@ -33,7 +33,7 @@ class PipelineContext(BaseModel):
     original_message: str
     
     # State (Mutable by plugins)
-    history: List[Dict[str, str]] = Field(default_factory=list)
+    history: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
     # Output

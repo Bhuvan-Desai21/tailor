@@ -255,7 +255,7 @@ class Plugin(PluginBase):
         history = data["branches"][active_branch]
         
         # Create message entries
-        time_marker = time.time()
+        time_marker = str(time.time())
         user_msg = {"role": "user", "content": ctx.message, "time_marker": time_marker}
         assistant_msg = {"role": "assistant", "content": ctx.response, "time_marker": time_marker}
         

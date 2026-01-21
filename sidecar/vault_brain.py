@@ -655,7 +655,7 @@ class VaultBrain:
         
         Args:
             message: The user message to send
-            history: Conversation history
+            history: Conversation history (optional, now fetched from backend)
             category: Model category to use (fast, thinking, etc.)
             stream: If True, stream tokens via WebSocket events
             stream_id: Optional ID to identify this stream (for multiple concurrent streams)
@@ -675,6 +675,23 @@ class VaultBrain:
         if not message:
             return {"status": "error", "error": "message is required"}
         
+        # Backend State Management: Fetch history from Memory plugin if available
+        if chat_id:
+            memory_plugin = self.plugins.get("memory")
+            if memory_plugin and hasattr(memory_plugin, "get_chat_history"):
+                try:
+                    # Fetch stored history
+                    res = await memory_plugin.get_chat_history(chat_id=chat_id)
+                    if res.get("status") == "success":
+                        stored_history = res.get("history", [])
+                        # Use stored history. 
+                        # Note: We prioritize backend state. Incoming 'history' is ignored if backend has data.
+                        # However, for robustness, if backend is empty but frontend sends history, maybe we use it?
+                        # For now, strict backend authority is cleaner.
+                        history = stored_history
+                except Exception as e:
+                    logger.warning(f"Failed to fetch history from memory: {e}")
+
         # Generate stream_id if streaming and not provided
         if stream and not stream_id:
             stream_id = utils.generate_id("stream_")
