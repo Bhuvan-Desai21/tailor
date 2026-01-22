@@ -92,7 +92,7 @@ class Plugin(PluginBase):
 
     async def get_chat_history(self, chat_id: str = "", **kwargs) -> Dict[str, Any]:
         """Get messages from chat (convenience wrapper)."""
-        result = await self.brain.execute_command("chat.load", chat_id=chat_id)
+        result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
         if result.get("status") != "success":
             return result
         
@@ -121,7 +121,7 @@ class Plugin(PluginBase):
             ctx.metadata["chat_id"] = chat_id
         
         # Load existing data
-        result = await self.brain.execute_command("chat.load", chat_id=chat_id)
+        result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
         data = result.get("data", {"messages": []})
         
         # Ensure messages array exists
@@ -150,7 +150,8 @@ class Plugin(PluginBase):
         data["messages"].append(assistant_msg)
         
         # Save back
-        await self.brain.execute_command("chat.save", chat_id=chat_id, data=data)
+        await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+        self.logger.info(f"Saved interaction to {chat_id}.json")
         
         # Store generated IDs in metadata
         ctx.metadata["generated_ids"] = {
