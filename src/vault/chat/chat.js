@@ -244,6 +244,84 @@ function bindEvents(container) {
     if (window.lucide) {
         setTimeout(() => window.lucide.createIcons(), 0);
     }
+
+    // Handle branch switching (Divider Click)
+    const messagesEl = container.querySelector('#chat-messages');
+    messagesEl?.addEventListener('click', async (e) => {
+        const divider = e.target.closest('.branch-divider-content');
+        if (divider) {
+            const branchId = divider.dataset.branchId;
+            if (branchId) {
+                await switchBranch(branchId);
+            }
+        }
+    });
+}
+
+/**
+ * Switch to a specific branch
+ */
+async function switchBranch(branchId) {
+    if (!activeChatId) return;
+
+    try {
+        setStatus('Switching branch...');
+        console.log('[Chat] Switching to branch:', branchId);
+
+        const res = await request('branch.switch', {
+            chat_id: activeChatId,
+            branch: branchId
+        });
+
+        const result = res.result || res;
+
+        if (result.status === 'success') {
+            conversationHistory = result.history || [];
+
+            // Clear and re-render
+            const messagesEl = document.getElementById('chat-messages');
+            if (messagesEl) messagesEl.innerHTML = '';
+
+            // Helper to re-render (duplicated from loadHistory/createBranch - should be shared really)
+            // But for now, let's just reuse the logic from loadHistory if we can, 
+            // OR just call renderConversation if it was accessible (it's inside proper scope in createBranch listener but not here).
+            // Let's make a render function accessible or just duplicate the loop for now to be safe and quick.
+
+            if (conversationHistory.length === 0) {
+                addSystemMessage('Branch is empty.');
+            } else {
+                let lastBranchId = null;
+                conversationHistory.forEach((msg, idx) => {
+                    if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
+                        const dividerId = msg.source_branch.substring(0, 8);
+                        addSystemMessage(
+                            `<div class="branch-divider-content" data-branch-id="${msg.source_branch}" style="cursor: pointer; opacity:0.7; font-size: 0.8em; padding: 4px; border-top: 1px dashed #666;">
+                                <i data-lucide="git-branch" style="vertical-align: middle; width: 14px;"></i> 
+                                Branch: ${dividerId} <span style="opacity: 0.5">(Click to focus)</span>
+                            </div>`,
+                            'branch-divider'
+                        );
+                    }
+                    if (msg.source_branch) lastBranchId = msg.source_branch;
+
+                    const msgEl = addMessage(msg.role, msg.content, false, msg.id);
+                    if (msgEl) msgEl.dataset.messageIndex = idx;
+                });
+            }
+
+            addSystemMessage(`Switched to branch: ${branchId.substring(0, 8)}...`);
+            setStatus('Ready');
+
+        } else {
+            console.error('[Chat] Switch failed:', result.error);
+            showToast(`Switch failed: ${result.error}`, 'error');
+            setStatus('Error request');
+        }
+    } catch (e) {
+        console.error('[Chat] Switch exception:', e);
+        showToast(`Switch error: ${e.message}`, 'error');
+        setStatus('Error');
+    }
 }
 
 /**
@@ -263,6 +341,28 @@ async function sendMessage() {
     const welcomeMsg = document.querySelector('.welcome-message');
     if (welcomeMsg) {
         welcomeMsg.remove();
+    }
+
+    // Slash Command Support
+    if (message.startsWith('/')) {
+        const parts = message.split(' ');
+        const cmd = parts[0].toLowerCase();
+
+        if (cmd === '/switch' || cmd === '/checkout') {
+            const branchId = parts[1];
+            if (!branchId) {
+                addSystemMessage('Usage: /switch <branch_id>');
+                return;
+            }
+            await switchBranch(branchId);
+            return;
+        }
+
+        if (cmd === '/branches') {
+            // Quick hack to list branches via system message?
+            // Not implemented yet but placeholder
+            console.log("Branch list requested via slash command");
+        }
     }
 
     // Add user message to UI
@@ -468,7 +568,7 @@ function updateMessage(msgEl, content, isError = false) {
 /**
  * Add a system message
  */
-function addSystemMessage(content, className = '') {
+function addSystemMessage(content, className = '', allowHtml = false) {
     const messagesEl = document.getElementById('chat-messages');
     if (!messagesEl) return;
 
@@ -477,9 +577,13 @@ function addSystemMessage(content, className = '') {
     if (className) {
         msgEl.classList.add(className);
     }
-    msgEl.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
+
+    // Check if content is already escaped/safe or needs escaping
+    const innerContent = allowHtml ? content : escapeHtml(content);
+    msgEl.innerHTML = `<div class="message-content">${innerContent}</div>`;
 
     messagesEl.appendChild(msgEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 /**
