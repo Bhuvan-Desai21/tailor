@@ -37,6 +37,7 @@ class Plugin(PluginBase):
         
     async def on_client_connected(self) -> None:
         """Register UI when client connects."""
+        # Register Branch button action
         self._emit_ui_command("register_action", {
             "id": "branch",
             "icon": "git-branch",
@@ -46,6 +47,25 @@ class Plugin(PluginBase):
             "location": "message-actionbar",
             "command": "event:chat:createBranch"
         })
+        
+        # Load frontend JavaScript module
+        ui_path = self.plugin_dir / "ui.js"
+        if ui_path.exists():
+            try:
+                with open(ui_path, 'r', encoding='utf-8') as f:
+                    ui_code = f.read()
+                
+                # Inject script using inject_html action
+                # DO NOT use f-strings for the whole payload as it corrupts JavaScript braces
+                self._emit_ui_command("inject_html", {
+                    "id": "plugin-script-" + self.name,
+                    "target": "head",
+                    "position": "beforeend",
+                    "html": "<script>" + ui_code + "</script>"
+                })
+                self.logger.info("Loaded frontend UI module")
+            except Exception as e:
+                self.logger.error(f"Failed to load UI module: {e}")
 
     # =========================================================================
     # Event Handlers
@@ -99,6 +119,8 @@ class Plugin(PluginBase):
 
     async def create_branch(self, chat_id: str = "", message_id: str = "", branch_id: str = None, **kwargs) -> Dict[str, Any]:
         """Create a new branch from a message."""
+        self.logger.info("Chat Branches: Creating branch...")
+
         if not chat_id:
             p = kwargs.get("p") or kwargs.get("params", {})
             chat_id = p.get("chat_id")
@@ -354,10 +376,18 @@ class Plugin(PluginBase):
             
             history = await self._get_filtered_history(chat_id, branch)
             
+            # Load branches metadata for frontend UI
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            branches_meta = {}
+            if result.get("status") == "success":
+                data = result.get("data", {})
+                branches_meta = data.get("branches", {})
+            
             return {
                 "status": "success",
                 "chat_id": chat_id,
                 "history": history,
+                "branches": branches_meta,
                 "active_branch": branch or "main"
             }
         except Exception as e:

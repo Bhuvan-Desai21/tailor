@@ -10,7 +10,6 @@ import { createToolbar, registerAction, refreshComposerToolbar } from './Message
 
 // Chat state
 let conversationHistory = [];
-let branchesMetadata = {}; // Metadata for branch navigation
 let isWaitingForResponse = false;
 let currentCategory = 'fast';
 let messageIdCounter = 0;
@@ -82,14 +81,18 @@ async function loadHistory(chatId) {
 
     try {
         setStatus('Loading history...');
-        const res = await request('memory.get_chat_history', {
+        const res = await request('chat.get_history', {
             chat_id: chatId
         });
 
         const result = res.result || {};
         if (result.status === 'success') {
             conversationHistory = result.history || [];
-            branchesMetadata = result.branches || {};
+
+            // Dispatch event so plugins can see the raw data (including branches)
+            window.dispatchEvent(new CustomEvent('chat:historyLoaded', {
+                detail: { chatId, result }
+            }));
 
             // Clear current messages
             const messagesEl = document.getElementById('chat-messages');
@@ -244,85 +247,8 @@ function bindEvents(container) {
     if (window.lucide) {
         setTimeout(() => window.lucide.createIcons(), 0);
     }
-
-    // Handle branch switching (Divider Click)
-    const messagesEl = container.querySelector('#chat-messages');
-    messagesEl?.addEventListener('click', async (e) => {
-        const divider = e.target.closest('.branch-divider-content');
-        if (divider) {
-            const branchId = divider.dataset.branchId;
-            if (branchId) {
-                await switchBranch(branchId);
-            }
-        }
-    });
 }
 
-/**
- * Switch to a specific branch
- */
-async function switchBranch(branchId) {
-    if (!activeChatId) return;
-
-    try {
-        setStatus('Switching branch...');
-        console.log('[Chat] Switching to branch:', branchId);
-
-        const res = await request('branch.switch', {
-            chat_id: activeChatId,
-            branch: branchId
-        });
-
-        const result = res.result || res;
-
-        if (result.status === 'success') {
-            conversationHistory = result.history || [];
-
-            // Clear and re-render
-            const messagesEl = document.getElementById('chat-messages');
-            if (messagesEl) messagesEl.innerHTML = '';
-
-            // Helper to re-render (duplicated from loadHistory/createBranch - should be shared really)
-            // But for now, let's just reuse the logic from loadHistory if we can, 
-            // OR just call renderConversation if it was accessible (it's inside proper scope in createBranch listener but not here).
-            // Let's make a render function accessible or just duplicate the loop for now to be safe and quick.
-
-            if (conversationHistory.length === 0) {
-                addSystemMessage('Branch is empty.');
-            } else {
-                let lastBranchId = null;
-                conversationHistory.forEach((msg, idx) => {
-                    if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
-                        const dividerId = msg.source_branch.substring(0, 8);
-                        addSystemMessage(
-                            `<div class="branch-divider-content" data-branch-id="${msg.source_branch}" style="cursor: pointer; opacity:0.7; font-size: 0.8em; padding: 4px; border-top: 1px dashed #666;">
-                                <i data-lucide="git-branch" style="vertical-align: middle; width: 14px;"></i> 
-                                Branch: ${dividerId} <span style="opacity: 0.5">(Click to focus)</span>
-                            </div>`,
-                            'branch-divider'
-                        );
-                    }
-                    if (msg.source_branch) lastBranchId = msg.source_branch;
-
-                    const msgEl = addMessage(msg.role, msg.content, false, msg.id);
-                    if (msgEl) msgEl.dataset.messageIndex = idx;
-                });
-            }
-
-            addSystemMessage(`Switched to branch: ${branchId.substring(0, 8)}...`);
-            setStatus('Ready');
-
-        } else {
-            console.error('[Chat] Switch failed:', result.error);
-            showToast(`Switch failed: ${result.error}`, 'error');
-            setStatus('Error request');
-        }
-    } catch (e) {
-        console.error('[Chat] Switch exception:', e);
-        showToast(`Switch error: ${e.message}`, 'error');
-        setStatus('Error');
-    }
-}
 
 /**
  * Send a message (supports both streaming and non-streaming modes)
@@ -341,28 +267,6 @@ async function sendMessage() {
     const welcomeMsg = document.querySelector('.welcome-message');
     if (welcomeMsg) {
         welcomeMsg.remove();
-    }
-
-    // Slash Command Support
-    if (message.startsWith('/')) {
-        const parts = message.split(' ');
-        const cmd = parts[0].toLowerCase();
-
-        if (cmd === '/switch' || cmd === '/checkout') {
-            const branchId = parts[1];
-            if (!branchId) {
-                addSystemMessage('Usage: /switch <branch_id>');
-                return;
-            }
-            await switchBranch(branchId);
-            return;
-        }
-
-        if (cmd === '/branches') {
-            // Quick hack to list branches via system message?
-            // Not implemented yet but placeholder
-            console.log("Branch list requested via slash command");
-        }
     }
 
     // Add user message to UI
@@ -671,105 +575,6 @@ function setupToolbarEventListeners() {
         reindexMessages();
     });
 
-    // Handle create branch
-    window.addEventListener('chat:createBranch', async (e) => {
-        const { branchFrom, history, messageId, message } = e.detail;
-
-        console.log('[Chat] Branch event received:', { messageId, message, activeChatId });
-
-        if (!activeChatId) {
-            console.error('[Chat] Cannot branch: No active chat ID');
-            return;
-        }
-
-        try {
-            setStatus('Branching...');
-
-            // Call backend to create branch using Message ID (V3)
-            // Try 'branch.create' (new plugin)
-            const res = await request('branch.create', {
-                chat_id: activeChatId,
-                message_id: messageId,
-                name: null // Optional name
-            });
-
-            console.log('[Chat] Branch response:', res);
-
-            // Graceful degradation / Error handling
-            if (res.error) {
-                console.error("Branch creation failed:", res.error);
-                if (res.error.code === -32601) {
-                    showToast("Branching plugin disabled", "error");
-                } else {
-                    showToast(res.error.message || "Failed to create branch", "error");
-                }
-                return;
-            }
-
-            const result = res.result || res; // Handle wrapped or unwrapped
-            console.log('[Chat] Branch result:', result);
-
-            if (result.status === 'success') {
-                /**
-                 * Render conversation history with branch dividers
-                 */
-                function renderConversation(history) {
-                    const messagesEl = document.getElementById('chat-messages');
-                    if (messagesEl) {
-                        messagesEl.innerHTML = '';
-                    }
-
-                    if (!history || history.length === 0) {
-                        addSystemMessage('Welcome! Type a message to start chatting.', 'welcome-message');
-                        return;
-                    }
-
-                    let lastBranchId = null;
-
-                    history.forEach((msg, idx) => {
-                        // Check for branch change
-                        if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
-                            // Visual divider with click interaction
-                            const dividerId = msg.source_branch.substring(0, 8);
-                            addSystemMessage(
-                                `<div class="branch-divider-content" data-branch-id="${msg.source_branch}" style="cursor: pointer; opacity:0.7; font-size: 0.8em;">
-                    <i data-lucide="git-branch" style="vertical-align: middle; width: 14px;"></i> 
-                    Branch: ${dividerId} <span style="opacity: 0.5">(Click to switch)</span>
-                  </div>`,
-                                'branch-divider'
-                            );
-                        }
-
-                        if (msg.source_branch) lastBranchId = msg.source_branch;
-
-                        const msgEl = addMessage(msg.role, msg.content, false, msg.id);
-                        if (msgEl) {
-                            msgEl.dataset.messageIndex = idx;
-                        }
-                    });
-                }
-
-                // Update local state with backend source of truth
-                conversationHistory = result.history || [];
-
-                addSystemMessage(`Switched to branch: "${result.branch}"`);
-
-                // Re-render messages using helper
-                renderConversation(conversationHistory);
-
-                setStatus('Ready');
-            } else {
-                console.error('[Chat] Branch error:', result.error);
-                addSystemMessage(`Failed to create branch: ${result.error}`, 'chat-message-error');
-                setStatus('Error');
-            }
-        } catch (err) {
-            console.error('[Chat] Branch request failed:', err);
-            addSystemMessage(`Branch failed: ${err.message}`, 'chat-message-error');
-            setStatus('Error');
-        }
-    });
-
     // Handle regenerate
     window.addEventListener('chat:regenerate', async (e) => {
         const { messageIndex, model } = e.detail;
@@ -819,7 +624,6 @@ function setupToolbarEventListeners() {
                 updateMessage(assistantMsgEl, response);
 
                 // Reload history to ensure we have valid UUIDs from backend
-                // This prevents "Message ID not found" errors when branching immediately
                 await loadHistory(activeChatId);
 
                 setStatus('Ready');
@@ -967,7 +771,7 @@ export function setStreaming(enabled) {
 }
 
 /**
- * Render conversation history with branch tabs
+ * Render conversation history
  */
 function renderConversation(history) {
     const messagesEl = document.getElementById('chat-messages');
@@ -980,154 +784,20 @@ function renderConversation(history) {
         return;
     }
 
-    let lastBranchId = null;
-
     history.forEach((msg, idx) => {
-        // Check for branch change
-        if (msg.source_branch && lastBranchId && msg.source_branch !== lastBranchId) {
-            const currentBranch = branchesMetadata[msg.source_branch];
-
-            // If we have metadata, show tabbed interface
-            if (currentBranch) {
-                const siblings = Object.values(branchesMetadata).filter(b =>
-                    b.parent_branch === currentBranch.parent_branch
-                );
-
-                // Sort: Put current first? or alphabetical? or by creation?
-                // Simple sort by ID for stability
-                siblings.sort((a, b) => a.id.localeCompare(b.id));
-
-                const tabsHtml = siblings.map(b => {
-                    const isActive = b.id === msg.source_branch;
-                    const name = b.display_name || b.id.substring(0, 8);
-
-                    // Inline styles for tabs
-                    const bg = isActive ? 'var(--color-accent, #3b82f6)' : 'rgba(255,255,255,0.1)';
-                    const color = isActive ? 'white' : 'var(--text-muted, #888)';
-                    const cursor = isActive ? 'default' : 'pointer';
-                    const border = isActive ? '1px solid transparent' : '1px solid rgba(255,255,255,0.1)';
-
-                    return `
-                        <button 
-                            onclick="window.dispatchEvent(new CustomEvent('chat:switchBranch', { detail: { branchId: '${b.id}' } }))"
-                            style="
-                                background: ${bg};
-                                color: ${color};
-                                border: ${border};
-                                border-radius: 4px;
-                                padding: 2px 8px;
-                                margin-right: 4px;
-                                font-size: 0.8em;
-                                cursor: ${cursor};
-                            "
-                            title="ID: ${b.id}"
-                            ${isActive ? 'disabled' : ''}
-                        >
-                            <i data-lucide="git-branch" style="width:12px; vertical-align:middle; margin-right:2px;"></i>
-                            ${escapeHtml(name)}
-                        </button>
-                     `;
-                }).join('');
-
-                addSystemMessage(
-                    `<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px;">
-                        ${tabsHtml}
-                      </div>`,
-                    'branch-divider'
-                );
-            } else {
-                // Fallback if no metadata
-                const dividerId = msg.source_branch.substring(0, 8);
-                addSystemMessage(`<div>Branch: ${dividerId}</div>`, 'branch-divider');
-            }
-        }
-
-        if (msg.source_branch) lastBranchId = msg.source_branch;
-
-        const msgEl = addMessage(msg.role, msg.content);
+        const msgEl = addMessage(msg.role, msg.content, false, msg.id);
         if (msgEl) {
             msgEl.dataset.messageIndex = idx;
             if (msg.id) msgEl.dataset.messageId = msg.id;
         }
     });
 
-    // Check for children at the end (Forward Navigation)
-    // This handles the case where we are viewing a Parent branch and need to see valid next steps
-    if (lastBranchId && branchesMetadata[lastBranchId]) {
-        const children = Object.values(branchesMetadata).filter(b =>
-            b.parent_branch === lastBranchId
-        );
-
-        if (children.length > 0) {
-            // Sort by creation/ID
-            children.sort((a, b) => a.id.localeCompare(b.id));
-
-            const tabsHtml = children.map(b => {
-                const name = b.display_name || b.id.substring(0, 8);
-
-                return `
-                    <button 
-                        onclick="window.dispatchEvent(new CustomEvent('chat:switchBranch', { detail: { branchId: '${b.id}' } }))"
-                        style="
-                            background: rgba(255,255,255,0.1);
-                            color: var(--text-muted, #888);
-                            border: 1px solid rgba(255,255,255,0.1);
-                            border-radius: 4px;
-                            padding: 2px 8px;
-                            margin-right: 4px;
-                            font-size: 0.8em;
-                            cursor: pointer;
-                        "
-                        title="ID: ${b.id}"
-                    >
-                        <i data-lucide="git-branch" style="width:12px; vertical-align:middle; margin-right:2px;"></i>
-                        ${escapeHtml(name)}
-                    </button>
-                 `;
-            }).join('');
-
-            addSystemMessage(
-                `<div style="display: flex; direction: column; gap: 4px;">
-                    <div style="font-size: 0.8em; opacity: 0.7; margin-bottom: 4px;">Branched paths:</div>
-                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px;">
-                        ${tabsHtml}
-                    </div>
-                </div>`,
-                'branch-divider'
-            );
-        }
-    }
+    // Notify plugins that rendering is complete
+    window.dispatchEvent(new CustomEvent('chat:rendered', {
+        detail: { history }
+    }));
 }
 
-// Global listener for branch switching
-window.addEventListener('chat:switchBranch', async (e) => {
-    const { branchId } = e.detail;
-    await switchToBranch(branchId);
-});
-
-async function switchToBranch(branchId) {
-    if (!activeChatId) return;
-    setStatus('Switching...');
-    try {
-        const res = await request('memory.switch_branch', {
-            chat_id: activeChatId,
-            branch: branchId
-        });
-
-        const result = res.result || {};
-        if (result.status === 'success') {
-            // Reload full history to get fresh metadata (in case of new branches)
-            await loadHistory(activeChatId);
-            setStatus('Ready');
-        } else {
-            addSystemMessage(`Failed to switch: ${result.error}`, 'chat-message-error');
-            setStatus('Error');
-        }
-    } catch (e) {
-        setStatus('Error');
-        console.error(e);
-    }
-}
 
 /**
  * Export for global access
@@ -1138,5 +808,15 @@ export default {
     getHistory,
     setStreaming,
     clearChat: () => clearChat(),
+    loadHistory,
     registerAction // Expose for plugins
+};
+
+// Also attach to window for easier plugin access
+window.chatModule = {
+    loadHistory,
+    addMessage,
+    addSystemMessage,
+    renderConversation,
+    get activeChatId() { return activeChatId; }
 };
