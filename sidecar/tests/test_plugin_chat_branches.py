@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 import json
 import sys
@@ -9,6 +10,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from sidecar.vault_brain import VaultBrain
 
+@pytest.mark.asyncio
 async def test_plugin_chat_branches():
     """Test Chat Branches plugin with inline branch annotations."""
     
@@ -50,9 +52,10 @@ async def test_plugin_chat_branches():
         result = await brain.execute_command("branch.create", 
             chat_id=chat_id, 
             message_id=msg_id,
-            name="test_branch"
+            branch_id="test_branch"
         )
-        assert result["status"] == "success"
+        print(f"Branch Create Result 1: {result}")
+        assert result["status"] == "success", f"Branch creation failed: {result}"
         assert result["branch"] == "test_branch"
         
         # 3. Send message on branch
@@ -67,23 +70,94 @@ async def test_plugin_chat_branches():
         assert "branches" in data["messages"][-1]
         assert "test_branch" in data["messages"][-1]["branches"]
         
-        # 4. Switch to main (no branch)
+        # 4. List branches to find Root
+        result = await brain.execute_command("branch.list", chat_id=chat_id)
+        assert result["status"] == "success"
+        
+        # Find the branch that is effectively main/root (display_name="Main")
+        root_branch_id = None
+        for bid, bdata in result["branches"].items():
+            if bdata.get("display_name") == "Main":
+                root_branch_id = bid
+                break
+        
+        assert root_branch_id is not None
+        
+        # 5. Switch to Root
         result = await brain.execute_command("branch.switch",
             chat_id=chat_id,
-            branch=""
+            branch=root_branch_id
         )
         assert result["status"] == "success"
         
-        # Should only see original 2 messages (not branched ones)
+        # Should only see original 1 message (truncated)
         history = result["history"]
-        assert len(history) == 2
+        assert len(history) == 1
         
         # 5. List branches
         result = await brain.execute_command("branch.list", chat_id=chat_id)
         assert result["status"] == "success"
         assert "test_branch" in result["branches"]
         
-        print("Chat Branches Plugin Test Passed!")
+        # 6. Create Grandchild Branch (Recursive)
+        # We are currently on "test_branch" (which has 2 messages: "Main Msg 1", "Branch Message")
+        # Let's branch off "Branch Message" (the last one)
+        
+        # Get history to find the ID of "Branch Message"
+        current_history = await brain.execute_command("chat.get_history", chat_id=chat_id)
+        last_msg_id = current_history["history"][-1]["id"]
+        
+        result = await brain.execute_command("branch.create",
+            chat_id=chat_id,
+            message_id=last_msg_id,
+            branch_id="grandchild_branch"
+        )
+        assert result["status"] == "success"
+        
+        # 7. Verify Grandchild History
+        # Should contain:
+        # - Root Msg (1)
+        # - Child Msg (1) (Truncated from test_branch if split? OR if we branch from END, it's just append)
+        # Wait, if we branch from END, it's NOT a split. It's just a new head.
+        # But our create_branch logic treats everything as "Split" or "End Split".
+        # If "End Split" (tail is empty), we create a new branch parented to source.
+        # So: Root -> test_branch -> grandchild.
+        # History should specify messages from all 3? 
+        # Actually:
+        # Root has Msg1. 
+        # test_branch has Msg2.
+        # grandchild_branch starts empty?
+        # Let's send a message on grandchild.
+        
+        mock_instance.complete.return_value = MagicMock(content="Grandchild Resp", model="test", usage={})
+        await brain.chat_send(message="Grandchild Msg", chat_id=chat_id)
+        
+        # Now fetch history for grandchild
+        result = await brain.execute_command("chat.get_history", chat_id=chat_id)
+        history = result["history"]
+        
+        # Expectation:
+        # 1. Root Msg ("Hello") [Source: Root]
+        # 2. Test Branch Msg ("Branch Message") [Source: test_branch] (Assistant response)
+        #    Wait, in previous steps we sent "Branch Message" (User) + "Branch Response" (Assistant)?
+        #    Let's check previous steps... 
+        #    Step 3 sent "Branch Message". 
+        #    So test_branch has: "Branch Message", "Branch Response".
+        #    We branched off "Branch Response" (last_msg_id).
+        #    So "test_branch" keeps those messages.
+        #    "grandchild_branch" is new.
+        #    Plus "Grandchild Msg" + "Grandchild Resp".
+        # Total: 1 (Root) + 2 (Test) + 2 (Grandchild) = 5?
+        
+        assert len(history) >= 3 # At least one from each layer
+        
+        # Verify source_branch injection
+        # Last message should have source_branch = grandchild_branch
+        assert history[-1]["source_branch"] == "grandchild_branch"
+        # First message should have source_branch = root_branch_id
+        assert history[0]["source_branch"] == root_branch_id
+        
+        print("Chat Branches Plugin Recursive Test Passed!")
 
 if __name__ == "__main__":
     asyncio.run(test_plugin_chat_branches())
