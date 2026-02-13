@@ -37,6 +37,7 @@ impl WindowManager {
         .title(format!("Tailor - {}", Self::extract_vault_name(&vault_path)))
         .inner_size(1200.0, 800.0)
         .resizable(true)
+        .decorations(false)
         .build()?;
 
         // Store window reference

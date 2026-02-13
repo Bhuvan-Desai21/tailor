@@ -18,6 +18,7 @@ let cachedSettings = null;
 // Navigation items configuration
 // Fixed items that are not in settings.toml
 const FIXED_NAV_ITEMS = [
+    { id: 'themes', label: 'Themes', icon: 'palette' },
     { id: 'api-keys', label: 'API Keys', icon: 'key' },
     { id: 'models', label: 'Model Categories', icon: 'brain-circuit' }
 ];
@@ -160,6 +161,10 @@ async function renderSettingsSection(container, section, settings, vaultPath) {
     }
     if (section === 'models') {
         await renderModelsSection(container);
+        return;
+    }
+    if (section === 'themes') {
+        await initThemes(container);
         return;
     }
 
