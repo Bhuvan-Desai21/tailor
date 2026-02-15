@@ -115,8 +115,14 @@
             );
 
             if (children.length > 0) {
-                children.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
-                const forwardTabs = createBranchTabsElement(children, null, true);
+                // Add the parent itself to the options so user can stay on parent or switch to child
+                const parentBranch = branchesMetadata[lastBranchId];
+                const tabsList = [parentBranch, ...children];
+
+                tabsList.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+
+                // Use currentActiveBranch to highlight the correct tab (could be parent or one of the children)
+                const forwardTabs = createBranchTabsElement(tabsList, currentActiveBranch, true);
                 messagesEl.appendChild(forwardTabs);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }

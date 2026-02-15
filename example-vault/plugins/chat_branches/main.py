@@ -82,9 +82,27 @@ class Plugin(PluginBase):
             return
         
         # Get active branch for this chat
+        # enhanced: try to get from memory, or fallback to loading from DB
         active_branch = self.active_branches.get(chat_id)
+        
+        # Load chat data to check persistence and get allowed branches
+        result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+        if result.get("status") != "success":
+            return
+        
+        data = result.get("data", {})
+        
+        # If we don't have an active branch in memory, check the DB
         if not active_branch:
-            return  # No active branch, leave messages common
+             active_branch = data.get("active_branch")
+             
+        # If still no active branch, default to "main"
+        if not active_branch:
+            active_branch = "main"
+            self.active_branches[chat_id] = "main"
+
+        if not active_branch:
+            return  # Should not happen given above default, but safety check
         
         # Get generated message IDs
         generated_ids = ctx.metadata.get("generated_ids", {})
@@ -93,13 +111,7 @@ class Plugin(PluginBase):
         
         if not (user_msg_id and assistant_msg_id):
             return
-        
-        # Load chat data
-        result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
-        if result.get("status") != "success":
-            return
-        
-        data = result.get("data", {})
+
         messages = data.get("messages", [])
         
         # Find and annotate the new messages
@@ -110,6 +122,9 @@ class Plugin(PluginBase):
                 if active_branch not in msg["branches"]:
                     msg["branches"].append(active_branch)
         
+        # Ensure active_branch is persisted
+        data["active_branch"] = active_branch
+
         # Save back
         result = await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
         self.logger.debug(f"Annotated messages with branch '{active_branch}'")
@@ -260,11 +275,13 @@ class Plugin(PluginBase):
                 "parent_message_id": message_id
             }
             
-            # Save back
-            result = await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
-            
             # Set as active
             self.active_branches[chat_id] = branch_id
+            data["active_branch"] = branch_id
+            
+            # Save back
+            result = await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+
             
             # Get filtered history for this new branch
             history = await self._get_filtered_history(chat_id, branch_id)
@@ -291,8 +308,15 @@ class Plugin(PluginBase):
             branch = p.get("branch", branch)
         
         try:
-            # Set as active (default to "main" if empty)
-            target_branch = branch or "main"
+            # Check if effective change or first load
+            # Persist to backend
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            if result.get("status") == "success":
+                data = result.get("data", {})
+                data["active_branch"] = target_branch
+                await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
+
+            # Set as active in memory
             self.active_branches[chat_id] = target_branch
             
             # Get history
@@ -415,18 +439,24 @@ class Plugin(PluginBase):
             # Remove branch metadata
             del branches_meta[branch_id]
 
-            # Save back
-            await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
-
             # If deleted branch was active, switch to parent
             parent_branch = branch_info.get("parent_branch", "main")
-            if self.active_branches.get(chat_id) == branch_id:
-                self.active_branches[chat_id] = parent_branch
+            active = self.active_branches.get(chat_id)
+            
+            if active == branch_id:
+                self.active_branches[chat_id] = active = parent_branch
+            else:
+                active = active or "main"
+
+            data["active_branch"] = active
+
+            # Save back
+            await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
 
             self.logger.info(f"Deleted branch '{branch_id}' from chat '{chat_id}'")
 
             # Rebuild history for the new active branch
-            active = self.active_branches.get(chat_id, parent_branch)
+             # history = await self._get_filtered_history(chat_id, active)
             history = await self._get_filtered_history(chat_id, active)
 
             return {
@@ -449,18 +479,45 @@ class Plugin(PluginBase):
             branch = p.get("branch", branch)
         
         try:
+            # Load data first to check for persistent active branch if needed
+            # We need data anyway for history
+            
             # Use active branch if not specified
             if branch is None:
                 branch = self.active_branches.get(chat_id)
             
+            # We'll need to load chat to get history anyway, so let's do it and check active_branch there
+            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
+            if result.get("status") != "success":
+                 return result
+                 
+            data = result.get("data", {})
+            
+            if branch is None:
+                branch = data.get("active_branch")
+                # Fallback to main
+                if not branch:
+                    branch = "main"
+                # Update memory cache
+                self.active_branches[chat_id] = branch
+
+            # Now filter history
+            # (We already have data, so maybe optimize _get_filtered_history to take data? 
+            #  But for minimal refactor, let's just use _get_filtered_history logic inside here or rely on it loading again?
+            #  _get_filtered_history loads chat AGAIN. Ideally we shouldn't.
+            #  Let's inline the filtering logic or pass data if possible. 
+            #  The helper _get_filtered_history currently accepts (chat_id, branch_id) and loads chat.
+            #  Let's keep it simple and just call it. It's a second read but okay for now.)
+            
             history = await self._get_filtered_history(chat_id, branch)
             
-            # Load branches metadata for frontend UI
-            result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
-            branches_meta = {}
-            if result.get("status") == "success":
-                data = result.get("data", {})
-                branches_meta = data.get("branches", {})
+            branches_meta = data.get("branches", {})
+            if "main" not in branches_meta:
+                branches_meta["main"] = {
+                    "display_name": "Main",
+                    "parent_branch": None,
+                    "created_at": 0
+                }
             
             return {
                 "status": "success",
@@ -525,9 +582,7 @@ class Plugin(PluginBase):
                     msg_copy["source_branch"] = matching_branch
                 elif is_common:
                      # If common, it technically belongs to the "root-most" or implicit main.
-                     # Let's leave it empty or set to root if we have one?
-                     # For now, leave empty implies "Common/Main".
-                     pass
+                     msg_copy["source_branch"] = "main"
                      
                 filtered.append(msg_copy)
         

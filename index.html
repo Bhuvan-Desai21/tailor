@@ -47,7 +47,7 @@
     <script type="module">
         import { createNavigation, initNavigation } from './src/components/navigation.js';
         import { initDashboard } from './src/pages/dashboard.js';
-        import { initConversations } from './src/pages/conversations.js';
+
         import { initVaultSettings } from './src/pages/vault-settings.js';
         import { initSettings } from './src/pages/settings.js';
         import { initThemes, loadSavedTheme } from './src/pages/themes.js';
@@ -63,7 +63,7 @@
 
         // Register routes
         window.router.register('dashboard', initDashboard);
-        window.router.register('conversations', initConversations);
+
         window.router.register('vault-settings', initVaultSettings);
         window.router.register('settings', initSettings);
         window.router.register('themes', initThemes);

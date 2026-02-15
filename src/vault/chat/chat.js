@@ -90,6 +90,12 @@ async function loadHistory(chatId) {
             chat_id: chatId
         });
 
+        // Update activeChatId to ensure we are sending to the correct chat
+        if (chatId) {
+            activeChatId = chatId;
+            window.activeChatId = chatId;
+        }
+
         const result = res.result || {};
         if (result.status === 'success') {
             conversationHistory = result.history || [];
