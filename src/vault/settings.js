@@ -291,11 +291,8 @@ function renderDynamicForm(container, data, path, fullSettings) {
         } else if (typeof val === 'object' && val !== null) {
             // Nested object (subsection)
             itemDiv.className = 'settings-subsection';
-            itemDiv.style.marginLeft = '10px';
-            itemDiv.style.borderLeft = '2px solid var(--border-subtle)';
-            itemDiv.style.paddingLeft = '10px';
-
-            itemDiv.innerHTML = `<h4 style="margin: 10px 0;">${formatLabel(key)}</h4>`;
+            // Inline styles removed, moved to CSS
+            itemDiv.innerHTML = `<h4 class="settings-subsection-title">${formatLabel(key)}</h4>`;
 
             // Recurse
             const subContainer = document.createElement('div');
@@ -308,8 +305,15 @@ function renderDynamicForm(container, data, path, fullSettings) {
 }
 
 function formatLabel(key) {
-    // camelCase to Words
-    return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    // 1. Replace underscores with spaces
+    // 2. Insert space before capital letters (camelCase)
+    // 3. Title Case
+    return key
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
 }
 
 async function updateSetting(settings, path, value) {

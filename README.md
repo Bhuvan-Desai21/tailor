@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **WORK IN PROGRESS**: This project is currently in early development. The codebase is unstable, requires major reworks, and is NOT representative of a final or stable product. Use with caution.
+
 # Tailor - AI Chat Client
 
 A modular AI framework that lets you stitch together models and tools into an assistant that fits you perfectly.

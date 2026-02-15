@@ -481,11 +481,47 @@ pub async fn get_effective_settings(
     vault_path: String,
     app: AppHandle,
 ) -> Result<serde_json::Value, String> {
-    // 1. Get Global Settings
+    // 1. Initialize with Defaults
+    let mut settings = serde_json::json!({
+        "theme": "system",
+        "autoUpdate": false,
+        "editor": {
+            "fontSize": 14,
+            "fontFamily": "Fira Code, monospace",
+            "wordWrap": "on"
+        },
+        "plugins": {
+            "chat_branches": {
+                "enabled": true,
+                "auto_name_branches": true,
+                "auto_name_main_branch": false,
+                "default_branch_name": "New Branch",
+                "confirm_delete": true
+            },
+            "memory": {
+                "enabled": true,
+                "auto_title": true,
+                "title_category": "fast",
+                "title_max_length": 50,
+                "max_messages": 0
+            },
+            "summarizer": {
+                "enabled": true,
+                "summary_category": "fast"
+            },
+            "prompt_refiner": {
+                "enabled": true,
+                "auto_refine": false,
+                "refine_category": "fast"
+            }
+        }
+    });
+
+    // 2. Load Global Settings (AppData or Local)
     let app_data_dir = app.path().app_data_dir().ok();
     
     // Try AppData settings.toml
-    let mut settings = if let Some(path) = app_data_dir.map(|p| p.join("settings.toml")) {
+    let mut loaded_settings = if let Some(path) = app_data_dir.map(|p| p.join("settings.toml")) {
         if path.exists() {
              match fs::read_to_string(&path).and_then(|c| toml::from_str(&c).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))) {
                  Ok(s) => Some(s),
@@ -502,14 +538,14 @@ pub async fn get_effective_settings(
     };
 
     // Try Local CWD settings.toml if not found/loaded
-    if settings.is_none() {
+    if loaded_settings.is_none() {
         let local_settings = std::env::current_dir()
             .map(|p| p.join("settings.toml"))
             .unwrap_or_else(|_| PathBuf::from("settings.toml"));
             
         if local_settings.exists() {
             match fs::read_to_string(&local_settings).and_then(|c| toml::from_str(&c).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))) {
-                 Ok(s) => { settings = Some(s); },
+                 Ok(s) => { loaded_settings = Some(s); },
                  Err(e) => {
                      println!("Local settings error (CWD): {}", e);
                  }
@@ -517,26 +553,12 @@ pub async fn get_effective_settings(
         }
     }
 
-    // Fallback to defaults
-    let mut settings = settings.unwrap_or_else(|| {
-        serde_json::json!({
-            "theme": "system",
-            "autoUpdate": false,
-            "editor": {
-                "fontSize": 14,
-                "fontFamily": "Fira Code, monospace",
-                "wordWrap": "on"
-            },
-            "plugins": {
-                "chat_branches": { "enabled": true },
-                "memory": { "enabled": true },
-                "summarizer": { "enabled": true },
-                "prompt_refiner": { "enabled": true }
-            }
-        })
-    });
+    // Merge loaded settings into defaults
+    if let Some(loaded) = loaded_settings {
+        merge_json(&mut settings, loaded);
+    }
 
-    // 2. Get Vault Settings
+    // 3. Get Vault Settings
     let vault_path_buf = PathBuf::from(&vault_path);
     let vault_config_path = vault_path_buf.join(".vault.toml");
     
@@ -548,7 +570,7 @@ pub async fn get_effective_settings(
                 match toml::from_str::<serde_json::Value>(&c) {
                     Ok(vault_config) => {
                         if let Some(vault_settings) = vault_config.get("settings") {
-                            // 3. Merge (Vault overrides Global)
+                            // 4. Merge (Vault overrides Global)
                             merge_json(&mut settings, vault_settings.clone());
                         }
                     },

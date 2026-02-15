@@ -29,7 +29,6 @@ class Plugin(PluginBase):
         self.brain.register_command("memory.search", self.search_chats, self.name)
         self.brain.register_command("memory.delete_chat", self.delete_chat, self.name)
         self.brain.register_command("memory.rename_chat", self.rename_chat, self.name)
-        self.brain.register_command("memory.rename_chat", self.rename_chat, self.name)
         self.brain.register_command("chat.get_history", self.get_chat_history, self.name)
         self.brain.register_command("chat.auto_title", self.manual_auto_title, self.name)
         

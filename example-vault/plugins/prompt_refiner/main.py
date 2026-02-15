@@ -225,8 +225,8 @@ class Plugin(PluginBase):
         
         # Subscribe to INPUT for auto-refine if enabled
         # We use a helper here or directly the method
-        from sidecar.constants import EventType
-        self.subscribe(EventType.INPUT, self._handle_auto_refine, priority=5)
+        from sidecar.pipeline.events import PipelineEvents
+        self.subscribe(PipelineEvents.INPUT, self._handle_auto_refine, priority=5)
 
         self.logger.info("Prompt Refiner plugin loaded")
         

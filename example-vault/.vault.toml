@@ -1,8 +1,10 @@
+version = "1.0.0"
 id = "vault_example_001"
 name = "Example Vault"
-version = "1.0.0"
 description = "Example vault demonstrating Tailor's plugin system"
 created = "2025-12-31T01:30:00Z"
+
+[llm]
 
 [llm.providers.ollama]
 base_url = "http://localhost:11434"
@@ -28,9 +30,6 @@ enabled = true
 [plugins.prompt_refiner]
 enabled = true
 
-[plugins.prompt-refiner]
-enabled = true
-
 [plugins.demo_plugin]
 enabled = false
 
@@ -41,4 +40,7 @@ enabled = true
 enabled = true
 
 [plugins.summarizer]
+enabled = true
+
+[plugins.plugin_manager]
 enabled = true
