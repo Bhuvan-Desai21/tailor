@@ -58,6 +58,8 @@ class Plugin(PluginBase):
         self.active_topics: Set[str] = set()
         self.current_chat_id: str = ""
         self._background_tasks: Set[asyncio.Task] = set()
+        # Accumulated topic set — built incrementally, one exchange at a time
+        self._current_topics: List[Dict[str, Any]] = []
 
         self.logger.info("Smart Context plugin initialized")
 
@@ -84,6 +86,14 @@ class Plugin(PluginBase):
             "<div style='padding:10px'><p>Waiting for context\u2026</p></div>"
         await self.set_panel_content(panel_id=self.panel_id, html_content=html)
 
+        # Re-emit accumulated topics so the panel is populated on reconnect
+        if self._current_topics and self.current_chat_id:
+            self.emit("smart_context.topics_updated", {
+                "chat_id": self.current_chat_id,
+                "topics": self._current_topics,
+                "total_messages": 0,
+            })
+
     async def on_unload(self) -> None:
         await self.remove_panel(self.panel_id)
         await super().on_unload()
@@ -93,7 +103,7 @@ class Plugin(PluginBase):
     # =========================================================================
 
     async def _on_pipeline_output(self, ctx: PipelineContext) -> None:
-        """After each LLM response: extract topics in background."""
+        """After each LLM response: incrementally extract topics in background."""
         if not ctx.response:
             return
         chat_id = ctx.metadata.get("chat_id")
@@ -149,7 +159,7 @@ class Plugin(PluginBase):
         return topics
 
     async def _run_topic_extraction(self, chat_id: str) -> None:
-        """Background: extract topics from chat and save + notify panel."""
+        """Incrementally extract topics from the latest exchange and merge into running set."""
         try:
             result = await self.brain.execute_command("memory.load_chat", chat_id=chat_id)
             if result.get("status") != "success":
@@ -159,19 +169,52 @@ class Plugin(PluginBase):
             if not messages:
                 return
 
-            topics = await self._extract_topics(messages)
-            data["topics"] = topics
+            # Only analyse the latest exchange (last 2 messages: user + assistant)
+            latest = messages[-2:] if len(messages) >= 2 else messages
+            new_topics = await self._extract_topics(latest)
+
+            # Merge into running accumulation — topics grow over time, never fully reset
+            if chat_id != self.current_chat_id:
+                # New chat: seed from whatever is already saved
+                self._current_topics = list(data.get("topics", []))
+            self._current_topics = self._merge_topics(self._current_topics, new_topics)
+
+            data["topics"] = self._current_topics
             await self.brain.execute_command("memory.save_chat", chat_id=chat_id, data=data)
 
             self.current_chat_id = chat_id
             self.emit("smart_context.topics_updated", {
                 "chat_id": chat_id,
-                "topics": topics,
+                "topics": self._current_topics,
                 "total_messages": len(messages),
             })
-            self.logger.info(f"Topics extracted for {chat_id}: {[t['label'] for t in topics]}")
+            self.logger.info(f"Topics for {chat_id}: {[t['label'] for t in self._current_topics]}")
         except Exception as e:
             self.logger.error(f"Topic extraction failed for {chat_id}: {e}")
+
+    def _merge_topics(
+        self, existing: List[Dict[str, Any]], new: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Merge newly extracted topics into the existing accumulated set.
+
+        Regular topics: union by label; count increments on each re-mention.
+        Sticky topic: replaced by the latest extraction's sticky entry.
+        """
+        regular = {t["label"]: dict(t) for t in existing if not t.get("sticky")}
+        for t in new:
+            if t.get("sticky"):
+                continue
+            if t["label"] in regular:
+                regular[t["label"]]["count"] += 1
+            else:
+                regular[t["label"]] = dict(t)
+
+        # Sticky: use the latest extraction's sticky entry if present, else keep existing
+        new_sticky = next((t for t in new if t.get("sticky")), None)
+        old_sticky = next((t for t in existing if t.get("sticky")), None)
+        sticky = [new_sticky or old_sticky] if (new_sticky or old_sticky) else []
+
+        return list(regular.values()) + sticky
 
     async def _compute_relevant_ids(
         self, chat_id: str, messages: List[Dict[str, Any]], sticky_ids: Set[str]

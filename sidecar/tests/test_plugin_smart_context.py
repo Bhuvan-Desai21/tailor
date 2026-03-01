@@ -226,6 +226,37 @@ class TestSmartContextPlugin:
         assert topics_event["total_messages"] == 1
         assert topics_event["topics"] == extracted_topics
 
+    def test_merge_topics_adds_new_and_increments_existing(self, plugin_instance):
+        """New topics are added; existing labels get their count incremented."""
+        existing = [{"label": "Tennis", "count": 2}, {"label": "Wimbledon", "count": 1}]
+        new = [{"label": "Wimbledon", "count": 1}, {"label": "Roger Federer", "count": 1}]
+        merged = plugin_instance._merge_topics(existing, new)
+        by_label = {t["label"]: t for t in merged}
+        assert by_label["Tennis"]["count"] == 2        # untouched
+        assert by_label["Wimbledon"]["count"] == 2     # incremented
+        assert by_label["Roger Federer"]["count"] == 1 # newly added
+
+    def test_merge_topics_sticky_replaced_by_latest(self, plugin_instance):
+        """Sticky entry from the new extraction replaces the old one."""
+        old_sticky = {"label": "Instructions & Preferences", "sticky": True,
+                      "message_ids": ["m1"], "count": 1}
+        new_sticky = {"label": "Instructions & Preferences", "sticky": True,
+                      "message_ids": ["m1", "m2"], "count": 2}
+        merged = plugin_instance._merge_topics([old_sticky], [new_sticky])
+        stickies = [t for t in merged if t.get("sticky")]
+        assert len(stickies) == 1
+        assert stickies[0]["count"] == 2
+
+    def test_merge_topics_preserves_sticky_when_none_in_new(self, plugin_instance):
+        """If no sticky in new extraction, keep the existing sticky."""
+        old_sticky = {"label": "Instructions & Preferences", "sticky": True,
+                      "message_ids": ["m1"], "count": 1}
+        new_regular = [{"label": "Tennis", "count": 1}]
+        merged = plugin_instance._merge_topics([old_sticky], new_regular)
+        stickies = [t for t in merged if t.get("sticky")]
+        assert len(stickies) == 1
+        assert stickies[0]["message_ids"] == ["m1"]
+
     @pytest.mark.asyncio
     async def test_context_injection_passthrough_when_no_active_topics(self, plugin_instance, mock_brain):
         plugin_instance.active_topics = set()
