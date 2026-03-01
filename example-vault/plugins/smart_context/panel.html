@@ -3,13 +3,16 @@
 <head>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: transparent; }
+body { background: transparent; height: 100%; }
 #sc-panel {
+  display: flex;
+  flex-direction: column;
   padding: 12px;
   font-family: var(--font-sans, system-ui, sans-serif);
   font-size: 13px;
   color: var(--text-primary, #e0e0e0);
   height: 100%;
+  gap: 8px;
 }
 .sc-sticky-bar {
   display: flex;
@@ -19,43 +22,30 @@ body { background: transparent; }
   background: rgba(255,255,255,0.06);
   border-radius: 6px;
   font-size: 12px;
-  margin-bottom: 12px;
   color: var(--text-muted, #aaa);
+  flex-shrink: 0;
 }
 .sc-sticky-bar strong { margin-left: auto; color: var(--text-primary, #e0e0e0); }
 .sc-mode-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 .sc-mode-row input { cursor: pointer; }
-#sc-bubbles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  min-height: 36px;
+#sc-svg {
+  flex: 1;
+  width: 100%;
+  min-height: 120px;
+  overflow: visible;
 }
-.sc-bubble {
-  cursor: pointer;
-  border-radius: 20px;
-  padding: 4px 12px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  transition: all 0.15s ease;
-  user-select: none;
-  white-space: nowrap;
+.sc-node { cursor: pointer; }
+.sc-no-topics {
+  opacity: 0.4;
+  font-size: 12px;
+  font-style: italic;
 }
-.sc-bubble:hover { background: rgba(255,255,255,0.15); }
-.sc-bubble.sc-active {
-  background: rgba(99,179,237,0.25);
-  border-color: rgba(99,179,237,0.6);
-  box-shadow: 0 0 8px rgba(99,179,237,0.3);
-}
-.sc-bubble.sc-dim { opacity: 0.35; }
-.sc-no-topics { opacity: 0.4; font-size: 12px; font-style: italic; }
-#sc-status { font-size: 12px; color: var(--text-muted, #888); }
+#sc-status { font-size: 12px; color: var(--text-muted, #888); flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -68,14 +58,11 @@ body { background: transparent; }
   </div>
 
   <div class="sc-mode-row">
-    <input type="checkbox" id="sc-toggle" checked
-           onchange="window.scToggleSimilarity(this.checked)">
+    <input type="checkbox" id="sc-toggle" checked>
     <label for="sc-toggle">Similarity filter</label>
   </div>
 
-  <div id="sc-bubbles">
-    <span class="sc-no-topics">Waiting for context…</span>
-  </div>
+  <svg id="sc-svg"></svg>
 
   <div id="sc-status">All messages in context</div>
 
@@ -85,72 +72,186 @@ var scTopics = [];
 var scActive = new Set();
 var scSimilarity = true;
 var scTotalMessages = 0;
+var scSim = null;
+var scNodes = [];
+
+function scRadius(count, maxCount, W, H) {
+  var minR = 18;
+  var maxR = Math.min(W, H) * 0.2;
+  return minR + (maxR - minR) * Math.sqrt(count / (maxCount || 1));
+}
+
+function scDrawBubbles() {
+  var svg = document.getElementById('sc-svg');
+  var hasFilter = scSimilarity && scActive.size > 0;
+  var maxR = 1;
+  scNodes.forEach(function(n) { if (n.r > maxR) maxR = n.r; });
+
+  var existing = {};
+  svg.querySelectorAll('.sc-node').forEach(function(g) {
+    existing[g.dataset.label] = g;
+  });
+
+  var currentLabels = {};
+  scNodes.forEach(function(n) { currentLabels[n.label] = true; });
+  Object.keys(existing).forEach(function(label) {
+    if (!currentLabels[label]) { existing[label].remove(); delete existing[label]; }
+  });
+
+  var NS = 'http://www.w3.org/2000/svg';
+  scNodes.forEach(function(n) {
+    var isActive = scActive.has(n.label);
+    var isDim = hasFilter && !isActive;
+
+    var g = existing[n.label];
+    if (!g) {
+      g = document.createElementNS(NS, 'g');
+      g.setAttribute('class', 'sc-node');
+      g.dataset.label = n.label;
+
+      var circle = document.createElementNS(NS, 'circle');
+      g.appendChild(circle);
+
+      var text = document.createElementNS(NS, 'text');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'middle');
+      text.setAttribute('pointer-events', 'none');
+      g.appendChild(text);
+
+      var capturedLabel = n.label;
+      g.addEventListener('click', function() { window.scToggleTopic(capturedLabel); });
+
+      svg.appendChild(g);
+      existing[n.label] = g;
+    }
+
+    var circle = g.querySelector('circle');
+    var text = g.querySelector('text');
+
+    var fillAlpha, strokeAlpha, strokeWidth;
+    if (isActive) {
+      fillAlpha = 0.35; strokeAlpha = 0.9; strokeWidth = 2;
+    } else if (isDim) {
+      fillAlpha = 0.04; strokeAlpha = 0.1; strokeWidth = 1;
+    } else {
+      fillAlpha = 0.10 + 0.15 * (n.r / maxR);
+      strokeAlpha = 0.28; strokeWidth = 1.5;
+    }
+
+    circle.setAttribute('cx', n.x.toFixed(1));
+    circle.setAttribute('cy', n.y.toFixed(1));
+    circle.setAttribute('r', n.r.toFixed(1));
+    circle.setAttribute('fill', 'rgba(99,179,237,' + fillAlpha.toFixed(2) + ')');
+    circle.setAttribute('stroke', 'rgba(99,179,237,' + strokeAlpha.toFixed(2) + ')');
+    circle.setAttribute('stroke-width', strokeWidth);
+
+    g.style.opacity = isDim ? '0.3' : '1';
+
+    var fontSize = Math.max(9, Math.min(13, n.r * 0.45));
+    text.setAttribute('x', n.x.toFixed(1));
+    text.setAttribute('y', n.y.toFixed(1));
+    text.setAttribute('font-size', fontSize.toFixed(1));
+    text.setAttribute('fill', isActive ? 'rgba(210,235,255,0.95)' : 'rgba(190,215,240,0.85)');
+    var maxChars = Math.floor(n.r * 1.8 / (fontSize * 0.6));
+    text.textContent = n.label.length > maxChars
+      ? n.label.slice(0, Math.max(2, maxChars - 1)) + '\u2026'
+      : n.label;
+  });
+}
+
+function scStartSim(topics) {
+  if (scSim) { scSim.stop(); scSim = null; }
+
+  var svg = document.getElementById('sc-svg');
+  var rect = svg.getBoundingClientRect();
+  var W = rect.width || 280;
+  var H = rect.height || 200;
+  var cx = W / 2;
+  var cy = H / 2;
+
+  var maxCount = Math.max.apply(null, topics.map(function(t) { return t.count; })) || 1;
+
+  var oldPos = {};
+  scNodes.forEach(function(n) { oldPos[n.label] = { x: n.x, y: n.y }; });
+
+  scNodes = topics.map(function(t) {
+    var old = oldPos[t.label];
+    return {
+      label: t.label,
+      count: t.count,
+      x: old ? old.x : cx + (Math.random() - 0.5) * W * 0.4,
+      y: old ? old.y : cy + (Math.random() - 0.5) * H * 0.4,
+      r: scRadius(t.count, maxCount, W, H)
+    };
+  });
+
+  var df = window.d3Force;
+  scSim = df.forceSimulation(scNodes)
+    .force('x', df.forceX(cx).strength(0.06))
+    .force('y', df.forceY(cy).strength(0.06))
+    .force('collide', df.forceCollide(function(n) { return n.r + 4; }).strength(0.85))
+    .alphaDecay(0.02)
+    .on('tick', scDrawBubbles);
+}
 
 function scRender() {
-  var bubblesEl = document.getElementById('sc-bubbles');
-  var statusEl  = document.getElementById('sc-status');
-  var stickyEl  = document.getElementById('sc-sticky-count');
-
-  var sticky = scTopics.find(function(t){ return t.sticky; });
+  var stickyEl = document.getElementById('sc-sticky-count');
+  var sticky = scTopics.find(function(t) { return t.sticky; });
   stickyEl.textContent = sticky ? sticky.count : 0;
 
-  var regular = scTopics.filter(function(t){ return !t.sticky; });
+  var regular = scTopics.filter(function(t) { return !t.sticky; });
+  var svg = document.getElementById('sc-svg');
+
   if (!regular.length) {
-    bubblesEl.textContent = '';
-    var placeholder = document.createElement('span');
-    placeholder.className = 'sc-no-topics';
+    if (scSim) { scSim.stop(); scSim = null; }
+    scNodes = [];
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var placeholder = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    placeholder.setAttribute('x', '50%');
+    placeholder.setAttribute('y', '50%');
+    placeholder.setAttribute('text-anchor', 'middle');
+    placeholder.setAttribute('dominant-baseline', 'middle');
+    placeholder.setAttribute('class', 'sc-no-topics');
+    placeholder.setAttribute('fill', 'rgba(200,200,200,0.4)');
+    placeholder.setAttribute('font-size', '12');
+    placeholder.setAttribute('font-style', 'italic');
     placeholder.textContent = 'No topics yet\u2026';
-    bubblesEl.appendChild(placeholder);
-    statusEl.textContent = 'All messages in context';
+    svg.appendChild(placeholder);
+    document.getElementById('sc-status').textContent = 'All messages in context';
     return;
   }
 
-  var maxCount = Math.max.apply(null, regular.map(function(t){ return t.count; }));
-  maxCount = maxCount || 1;  // guard against all-zero counts
-  var hasFilter = scSimilarity && scActive.size > 0;
+  scStartSim(regular);
+}
 
-  bubblesEl.textContent = '';
-  regular.forEach(function(t) {
-    var scale = (0.85 + 0.3 * (t.count / maxCount)).toFixed(2);
-    var div = document.createElement('div');
-    div.className = 'sc-bubble' +
-      (hasFilter ? (scActive.has(t.label) ? ' sc-active' : ' sc-dim') : '');
-    div.style.fontSize = scale + 'em';
-    div.textContent = t.label;  // safe: textContent never interprets HTML
-    div.addEventListener('click', function() {
-      window.scToggleTopic(t.label);  // closure captures label directly
-    });
-    bubblesEl.appendChild(div);
-  });
-
-  if (!hasFilter) {
-    statusEl.textContent = 'All messages in context';
-  }
-  // When hasFilter is true, status is updated by smart_context.highlight_applied listener
+// Redraw without restarting simulation (for filter/similarity toggles)
+function scRedraw() {
+  if (scNodes.length) scDrawBubbles();
 }
 
 window.scToggleTopic = function(label) {
   if (!scSimilarity) return;
   if (scActive.has(label)) scActive.delete(label);
   else scActive.add(label);
-  scRender();
+  scRedraw();
   window.request('smart_context.set_filter', {
     topics: Array.from(scActive)
-  }).catch(function(err){ console.error('[SmartContext] set_filter:', err); });
+  }).catch(function(err) { console.error('[SmartContext] set_filter:', err); });
 };
 
 window.scToggleSimilarity = function(enabled) {
   scSimilarity = enabled;
-  if (!enabled) {
-    scActive.clear();
-  }
+  if (!enabled) scActive.clear();
   window.request('smart_context.set_similarity_mode', {
     enabled: enabled
   }).catch(console.error);
-  scRender();
+  scRedraw();
 };
 
-// Backend pushes new topics after each response
+document.getElementById('sc-toggle').addEventListener('change', function() {
+  window.scToggleSimilarity(this.checked);
+});
+
 window.addEventListener('smart_context.topics_updated', function(e) {
   var d = e.detail || {};
   if (d.topics) {
@@ -160,13 +261,12 @@ window.addEventListener('smart_context.topics_updated', function(e) {
       scActive.clear();
       window.request('smart_context.set_filter', {
         topics: []
-      }).catch(function(err){ console.error('[SmartContext] clear filter:', err); });
+      }).catch(function(err) { console.error('[SmartContext] clear filter:', err); });
     }
     scRender();
   }
 });
 
-// Update status line with message count when highlighting is applied
 window.addEventListener('smart_context.highlight_applied', function(e) {
   var d = e.detail || {};
   var ids = d.message_ids || [];
@@ -176,7 +276,6 @@ window.addEventListener('smart_context.highlight_applied', function(e) {
   }
 });
 
-// Relay filter_changed -> chat highlighting
 window.addEventListener('smart_context.filter_changed', function(e) {
   window.dispatchEvent(new CustomEvent('smart_context.highlight_request', {
     detail: e.detail || {}
