@@ -24,6 +24,7 @@ from .pipeline import DefaultPipeline, GraphPipeline, PipelineConfig
 from .plugin_installer import PluginInstaller
 from .services.keyring_service import get_keyring_service, PROVIDERS
 from .services.llm_service import LLMService
+from .services.tool_service import ToolService
 from .event_bus import EventBus
 
 # Local import avoids circular dependency in type checking if used carefully
@@ -144,6 +145,7 @@ class VaultBrain:
         # Initialize LLM Service
         llm_config = self.config.get("llm", {})
         self._llm_service = LLMService(self.vault_path, llm_config)
+        self._tool_service = ToolService()
 
         # Store as singleton for other components
         import sidecar.services.llm_service as llm_module
@@ -709,6 +711,9 @@ class VaultBrain:
         stream: bool = False,
         stream_id: str = None,
         chat_id: str = None,
+        web_search: bool = False,
+        deep_search: bool = False,
+        attachments: List[Dict[str, Any]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -725,6 +730,21 @@ class VaultBrain:
 
         if not message:
             return {"status": "error", "error": "message is required"}
+
+        history = history or []
+        attachments = attachments or []
+
+        if attachments:
+            kwargs["attachments"] = attachments
+
+        if web_search or deep_search:
+            search_context = await self._augment_message_with_search(
+                message=message,
+                deep_search=deep_search,
+                web_search=web_search,
+            )
+            if search_context:
+                kwargs["tool_context"] = search_context
 
         # Generate chat_id if not provided (Backend Authority)
         if not chat_id:
@@ -777,6 +797,7 @@ class VaultBrain:
                     stream_id=stream_id,
                     chat_id=chat_id,
                     model=kwargs.get("model"),  # Pass specific model if provided
+                    metadata=kwargs,
                 )
             else:
                 # Non-streaming mode: wait for full response
@@ -785,7 +806,10 @@ class VaultBrain:
                     metadata["chat_id"] = chat_id
 
                 context = await self.pipeline.run(
-                    message=message, history=history, stream=False, metadata=metadata
+                    message=message,
+                    history=history,
+                    stream=False,
+                    metadata={**metadata, **kwargs},
                 )
 
                 return {
@@ -808,6 +832,7 @@ class VaultBrain:
         stream_id: str,
         chat_id: str = None,
         model: str = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Stream chat response tokens via WebSocket events.
@@ -830,6 +855,7 @@ class VaultBrain:
             metadata = {
                 "category": category,
                 "model": model,  # May be None, pipeline will use category
+                **(metadata or {}),
             }
             if chat_id:
                 metadata["chat_id"] = chat_id
@@ -909,6 +935,36 @@ class VaultBrain:
                 "stream_id": stream_id,
                 "error": str(e),
             }
+
+
+    async def _augment_message_with_search(
+        self, message: str, deep_search: bool, web_search: bool
+    ) -> str:
+        """Fetch web/deep search context and convert it to prompt text."""
+        if deep_search:
+            payload = await self._tool_service.deep_search(message)
+            heading = "Deep search context (web results):"
+        elif web_search:
+            payload = await self._tool_service.web_search(message)
+            heading = "Web search context:"
+        else:
+            return ""
+
+        if payload.get("status") != "success":
+            return ""
+        return self._tool_service.build_search_context(payload, heading)
+
+    @command("tools.web_search", constants.CORE_PLUGIN_NAME)
+    async def tool_web_search(
+        self, query: str = "", limit: int = 5, **kwargs
+    ) -> Dict[str, Any]:
+        return await self._tool_service.web_search(query=query, limit=limit)
+
+    @command("tools.deep_search", constants.CORE_PLUGIN_NAME)
+    async def tool_deep_search(
+        self, query: str = "", limit: int = 5, **kwargs
+    ) -> Dict[str, Any]:
+        return await self._tool_service.deep_search(query=query, limit=limit)
 
     @command("plugins.install", constants.CORE_PLUGIN_NAME)
     async def install_plugin(

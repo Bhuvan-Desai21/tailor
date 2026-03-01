@@ -2540,6 +2540,33 @@ body .lm_splitter.lm_horizontal:hover::after {
     color: var(--text-secondary);
 }
 
+
+.toolbar-send {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chat-input-area .icon-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border-radius: 8px;
+}
+
+.chat-input-area .icon-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.chat-input-area .icon-btn.active {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    background: var(--bg-overlay);
+}
+
 /* Composer Action Toolbar */
 .composer-action-toolbar {
     display: flex;

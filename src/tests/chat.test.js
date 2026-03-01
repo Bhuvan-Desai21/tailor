@@ -95,6 +95,32 @@ describe('chat.js', () => {
         expect(history[1].content).toBe('Test response');
     });
 
+
+    it('sends tool toggles and attachments in payload', async () => {
+        initChat(container);
+
+        request.mockResolvedValue({ result: { status: 'success', response: 'ok' } });
+        window.prompt = vi.fn().mockReturnValue('https://example.com/file.png');
+
+        container.querySelector('#chat-web-search').click();
+        container.querySelector('#chat-deep-search').click();
+        container.querySelector('#chat-attach').click();
+
+        const input = container.querySelector('#chat-input');
+        input.value = 'Find this';
+        container.querySelector('#chat-send').click();
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(request).toHaveBeenCalledWith('chat.send', expect.objectContaining({
+            web_search: true,
+            deep_search: true,
+            attachments: expect.arrayContaining([
+                expect.objectContaining({ type: 'image' })
+            ])
+        }));
+    });
+
     it('changes category using setCategory', async () => {
         initChat(container);
 

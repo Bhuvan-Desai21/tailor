@@ -175,6 +175,19 @@ class DefaultPipeline:
             context_str = "\n\n".join(rag[:5])
             system_prompt += f"\n\nContext:\n{context_str}"
 
+        tool_context = meta.get("tool_context", "")
+        if tool_context:
+            system_prompt += f"\n\n{tool_context}"
+
+        attachments = meta.get("attachments", [])
+        if attachments:
+            attachment_lines = ["User supplied attachments:"]
+            for item in attachments[:8]:
+                item_type = item.get("type", "file")
+                item_name = item.get("name") or item.get("filename") or "unnamed"
+                attachment_lines.append(f"- {item_type}: {item_name}")
+            system_prompt += "\n\n" + "\n".join(attachment_lines)
+
         messages.append({"role": "system", "content": system_prompt})
 
         for msg in history or []:

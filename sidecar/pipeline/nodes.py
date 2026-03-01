@@ -49,6 +49,20 @@ class PipelineNodes:
         if rag:
             context_str = "\n\n".join(rag[:5])
             system_prompt += f"\n\nContext:\n{context_str}"
+
+        tool_context = state.metadata.get("tool_context", "")
+        if tool_context:
+            system_prompt += f"\n\n{tool_context}"
+
+        attachments = state.metadata.get("attachments", [])
+        if attachments:
+            attachment_lines = ["User supplied attachments:"]
+            for item in attachments[:8]:
+                item_type = item.get("type", "file")
+                item_name = item.get("name") or item.get("filename") or "unnamed"
+                attachment_lines.append(f"- {item_type}: {item_name}")
+            system_prompt += "\n\n" + "\n".join(attachment_lines)
+
         state.metadata["final_system_prompt"] = system_prompt
 
         await self.brain.publish(PipelineEvents.PROMPT, sequential=True, ctx=state)
@@ -87,13 +101,15 @@ class PipelineNodes:
 
                 messages.append({"role": "user", "content": state.message})
 
-                # Get category from metadata or default to "fast"
+                # Get category/model from metadata or defaults
                 category = state.metadata.get("category", "fast")
+                model = state.metadata.get("model")
 
                 # Use LLMService via pipeline
                 llm_response = await self.llm_client.complete(
                     messages=messages,
                     category=category,
+                    model=model,
                     stream=False,  # Non-streaming for graph mode
                 )
                 response = llm_response.content

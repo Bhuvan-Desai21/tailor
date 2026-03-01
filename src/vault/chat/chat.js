@@ -22,6 +22,9 @@ let modelSelector = null;  // Model selector instance
 let activeStreamId = null;
 let activeStreamElement = null;
 let enableStreaming = true; // Toggle streaming mode
+let webSearchEnabled = false;
+let deepSearchEnabled = false;
+let pendingAttachments = [];
 
 /**
  * Initialize global chat listeners (run once)
@@ -220,6 +223,15 @@ function getChatHTML() {
                         <div class="toolbar-right">
                             <div id="model-selector-wrapper" class="model-selector-wrapper"></div>
                             <div class="toolbar-send">
+                                <button class="icon-btn" id="chat-attach" title="Attach media">
+                                    <i data-lucide="paperclip"></i>
+                                </button>
+                                <button class="icon-btn" id="chat-web-search" title="Toggle web search">
+                                    <i data-lucide="globe"></i>
+                                </button>
+                                <button class="icon-btn" id="chat-deep-search" title="Toggle deep search">
+                                    <i data-lucide="radar"></i>
+                                </button>
                                 <button class="chat-send-btn" id="chat-send" title="Send Message">
                                     <i data-lucide="arrow-up"></i>
                                 </button>
@@ -239,6 +251,9 @@ function bindEvents(container) {
     const input = container.querySelector('#chat-input');
     const sendBtn = container.querySelector('#chat-send');
     const clearBtn = container.querySelector('#chat-clear');
+    const webSearchBtn = container.querySelector('#chat-web-search');
+    const deepSearchBtn = container.querySelector('#chat-deep-search');
+    const attachBtn = container.querySelector('#chat-attach');
 
     // Send on button click
     sendBtn?.addEventListener('click', () => sendMessage());
@@ -256,6 +271,35 @@ function bindEvents(container) {
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 150) + 'px';
     });
+
+
+    webSearchBtn?.addEventListener('click', () => {
+        webSearchEnabled = !webSearchEnabled;
+        if (!webSearchEnabled) {
+            deepSearchEnabled = false;
+        }
+        syncToolButtonState(container);
+    });
+
+    deepSearchBtn?.addEventListener('click', () => {
+        deepSearchEnabled = !deepSearchEnabled;
+        if (deepSearchEnabled) {
+            webSearchEnabled = true;
+        }
+        syncToolButtonState(container);
+    });
+
+    attachBtn?.addEventListener('click', async () => {
+        const url = window.prompt('Add attachment URL or path (basic support):');
+        if (!url) return;
+        const name = url.split('/').pop() || 'attachment';
+        const type = detectAttachmentType(name);
+        pendingAttachments.push({ name, type, url });
+        syncToolButtonState(container);
+        addSystemMessage(`Attachment queued: ${name} (${type})`);
+    });
+
+    syncToolButtonState(container);
 
     // Toggle header dropdown
     const menuBtn = container.querySelector('#header-menu-btn');
@@ -372,10 +416,15 @@ async function sendMessage() {
             model: selectedModel,  // Pass specific model if selected
             stream: enableStreaming,
             stream_id: streamId,
-            chat_id: activeChatId
+            chat_id: activeChatId,
+            web_search: webSearchEnabled,
+            deep_search: deepSearchEnabled,
+            attachments: pendingAttachments
         });
 
         const result = res.result?.result || res.result || {};
+        pendingAttachments = [];
+        syncToolButtonState(document);
 
         if (result.status === 'success') {
             if (result.chat_id) {
@@ -621,6 +670,31 @@ function escapeHtml(text) {
     return div.innerHTML.replace(/\n/g, '<br>');
 }
 
+
+function syncToolButtonState(root = document) {
+    const webBtn = root.querySelector?.('#chat-web-search') || document.querySelector('#chat-web-search');
+    const deepBtn = root.querySelector?.('#chat-deep-search') || document.querySelector('#chat-deep-search');
+    const attachBtn = root.querySelector?.('#chat-attach') || document.querySelector('#chat-attach');
+
+    webBtn?.classList.toggle('active', webSearchEnabled);
+    deepBtn?.classList.toggle('active', deepSearchEnabled);
+    attachBtn?.classList.toggle('active', pendingAttachments.length > 0);
+
+    if (attachBtn) {
+        attachBtn.title = pendingAttachments.length
+            ? `Attachments queued: ${pendingAttachments.length}`
+            : 'Attach media';
+    }
+}
+
+function detectAttachmentType(name = '') {
+    const lower = name.toLowerCase();
+    if (/\.(png|jpe?g|gif|webp|svg)$/.test(lower)) return 'image';
+    if (/\.(mp4|mov|avi|mkv|webm)$/.test(lower)) return 'video';
+    if (/\.(mp3|wav|m4a|ogg|flac)$/.test(lower)) return 'audio';
+    return 'file';
+}
+
 /**
  * Initialize the model selector component
  */
@@ -757,6 +831,8 @@ function setupToolbarEventListeners() {
             });
 
             const result = res.result?.result || res.result || {};
+        pendingAttachments = [];
+        syncToolButtonState(document);
 
             if (result.status === 'success') {
                 const response = result.response || 'No response';
