@@ -72,6 +72,11 @@
     </div>
 
     <script type="module">
+        import { forceSimulation, forceCollide, forceX, forceY } from 'd3-force';
+        window.d3Force = { forceSimulation, forceCollide, forceX, forceY };
+    </script>
+
+    <script type="module">
         import { initVault } from './src/vault/main.js';
         import { loadSavedTheme } from './src/pages/themes.js';
 
