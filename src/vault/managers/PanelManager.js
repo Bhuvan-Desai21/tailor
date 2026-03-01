@@ -81,6 +81,13 @@ export class PanelManager {
         const panelEl = document.getElementById(`panel-${id}`);
         if (panelEl) {
             panelEl.innerHTML = `<div class="scrollable" style="padding: 12px;">${html}</div>`;
+            // Scripts in innerHTML don't auto-execute — re-create them to trigger execution
+            panelEl.querySelectorAll('script').forEach(oldScript => {
+                const newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                newScript.textContent = oldScript.textContent;
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
             // Re-init icons
             if (window.lucide) window.lucide.createIcons();
         }
