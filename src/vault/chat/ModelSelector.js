@@ -381,7 +381,7 @@ export class ModelSelector {
         const modalHtml = this.renderAdvancedPicker();
 
         if (window.ui && window.ui.showModal) {
-            window.ui.showModal('Select Model', modalHtml, '700px');
+            window.ui.showModal('Select Model', modalHtml.outerHTML, '700px');
 
             setTimeout(() => {
                 if (window.lucide) window.lucide.createIcons();

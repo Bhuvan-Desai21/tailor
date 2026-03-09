@@ -93,6 +93,9 @@ class VaultBrain:
         # Plugin Installer
         self.plugin_installer = PluginInstaller(self.vault_path)
 
+        # Active stream tracking for cancellation
+        self._active_streams: Dict[str, bool] = {}  # stream_id -> should_cancel
+
         self._initialized = True
         logger.info(f"VaultBrain Singleton created for: {self.vault_path}")
 
@@ -769,15 +772,25 @@ class VaultBrain:
 
         try:
             if stream:
-                # Streaming mode: emit tokens via WebSocket events
-                return await self._stream_chat_response(
+                # Streaming mode: fire-and-forget as background task
+                # This allows the WebSocket handler to process other commands
+                # (like chat.stop_stream) while tokens are being streamed
+                asyncio.create_task(self._stream_chat_response(
                     message=message,
                     history=history,
                     category=category,
                     stream_id=stream_id,
                     chat_id=chat_id,
                     model=kwargs.get("model"),  # Pass specific model if provided
-                )
+                    web_search=kwargs.get("web_search", False),
+                ))
+                # Return immediately so the WebSocket can process stop_stream
+                return {
+                    "status": "success",
+                    "streaming": True,
+                    "stream_id": stream_id,
+                    "chat_id": chat_id,
+                }
             else:
                 # Non-streaming mode: wait for full response
                 metadata = {}
@@ -800,6 +813,15 @@ class VaultBrain:
             logger.error(f"Chat error: {e}")
             return {"status": "error", "error": str(e)}
 
+    @command("chat.stop_stream", constants.CORE_PLUGIN_NAME)
+    async def stop_stream(self, stream_id: str = "", **kwargs) -> Dict[str, Any]:
+        """Stop an active stream by setting its cancellation flag."""
+        if stream_id and stream_id in self._active_streams:
+            self._active_streams[stream_id] = True
+            logger.info(f"Stream {stream_id} marked for cancellation")
+            return {"status": "success", "stream_id": stream_id}
+        return {"status": "error", "error": "Stream not found or already completed"}
+
     async def _stream_chat_response(
         self,
         message: str,
@@ -808,6 +830,7 @@ class VaultBrain:
         stream_id: str,
         chat_id: str = None,
         model: str = None,
+        web_search: bool = False,
     ) -> Dict[str, Any]:
         """
         Stream chat response tokens via WebSocket events.
@@ -820,6 +843,9 @@ class VaultBrain:
         full_response = ""
 
         try:
+            # Register this stream as active (not cancelled)
+            self._active_streams[stream_id] = False
+
             # Emit stream start event
             self.emit_to_frontend(
                 constants.EventType.CHAT_STREAM_START,
@@ -833,11 +859,18 @@ class VaultBrain:
             }
             if chat_id:
                 metadata["chat_id"] = chat_id
+            if web_search:
+                metadata["web_search"] = True
 
             # Use pipeline's stream_run method
             async for token in self.pipeline.stream_run(
                 message=message, history=history, metadata=metadata
             ):
+                # Check if stream was cancelled
+                if self._active_streams.get(stream_id, False):
+                    logger.info(f"Stream {stream_id} cancelled by user")
+                    break
+
                 full_response += token
 
                 # Emit token event
@@ -909,6 +942,9 @@ class VaultBrain:
                 "stream_id": stream_id,
                 "error": str(e),
             }
+        finally:
+            # Always clean up stream tracking
+            self._active_streams.pop(stream_id, None)
 
     @command("plugins.install", constants.CORE_PLUGIN_NAME)
     async def install_plugin(

@@ -7,6 +7,7 @@
 
 import { request } from '../connection.js';
 import { createToolbar, registerAction, refreshComposerToolbar } from './MessageActionToolbar.js';
+import { renderMarkdown, addCodeCopyButtons } from './markdown.js';
 import { getModelSelector } from './ModelSelector.js';
 import { settingsApi } from '../../services/api.js';
 
@@ -22,6 +23,7 @@ let modelSelector = null;  // Model selector instance
 let activeStreamId = null;
 let activeStreamElement = null;
 let enableStreaming = true; // Toggle streaming mode
+let webSearchEnabled = false; // Web search toggle state
 
 /**
  * Initialize global chat listeners (run once)
@@ -56,6 +58,21 @@ export function initChat(containerEl) {
 
     // Bind events
     bindEvents(containerEl);
+
+    // Register web search toggle in composer toolbar
+    registerAction({
+        id: 'web-search-toggle',
+        icon: 'globe',
+        label: 'Web Search',
+        position: 10,
+        type: 'toggle',
+        location: 'composer-actionbar',
+        active: false,
+        handler: (_, isActive) => {
+            webSearchEnabled = isActive;
+            console.log(`[Chat] Web search ${isActive ? 'enabled' : 'disabled'}`);
+        }
+    });
 
     // Initialize composer toolbar with registered actions
     refreshComposerToolbar();
@@ -223,6 +240,9 @@ function getChatHTML() {
                                 <button class="chat-send-btn" id="chat-send" title="Send Message">
                                     <i data-lucide="arrow-up"></i>
                                 </button>
+                                <button class="chat-stop-btn" id="chat-stop" title="Stop Generation" style="display:none;">
+                                    <i data-lucide="square"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -242,6 +262,26 @@ function bindEvents(container) {
 
     // Send on button click
     sendBtn?.addEventListener('click', () => sendMessage());
+
+    // Stop generation on button click
+    const stopBtn = container.querySelector('#chat-stop');
+    stopBtn?.addEventListener('click', () => {
+        if (activeStreamId) {
+            request('chat.stop_stream', { stream_id: activeStreamId });
+            isWaitingForResponse = false;
+            const sendEl = document.getElementById('chat-send');
+            const stopEl = document.getElementById('chat-stop');
+            if (sendEl) sendEl.style.display = '';
+            if (stopEl) stopEl.style.display = 'none';
+            if (activeStreamElement) {
+                const content = activeStreamElement.querySelector('.message-content')?.textContent || '';
+                updateMessage(activeStreamElement, content || '[Generation stopped]');
+            }
+            activeStreamId = null;
+            activeStreamElement = null;
+            setStatus('Stopped');
+        }
+    });
 
     // Send on Enter (Shift+Enter for newline)
     input?.addEventListener('keydown', (e) => {
@@ -340,6 +380,11 @@ async function sendMessage() {
         // We don't have stream_id yet, will get it from START event
         activeStreamElement = assistantMsgEl;
         // activeStreamId will be set in CHAT_STREAM_START
+        // Toggle Send → Stop button
+        const sendEl = document.getElementById('chat-send');
+        const stopEl = document.getElementById('chat-stop');
+        if (sendEl) sendEl.style.display = 'none';
+        if (stopEl) stopEl.style.display = '';
     }
 
     // Ensure we have a chat ID for this conversation
@@ -372,7 +417,8 @@ async function sendMessage() {
             model: selectedModel,  // Pass specific model if selected
             stream: enableStreaming,
             stream_id: streamId,
-            chat_id: activeChatId
+            chat_id: activeChatId,
+            web_search: webSearchEnabled
         });
 
         const result = res.result?.result || res.result || {};
@@ -474,7 +520,8 @@ function addMessage(role, content, isLoading = false, id = null) {
         loading.appendChild(document.createElement('span'));
         contentDiv.appendChild(loading);
     } else {
-        contentDiv.innerHTML = escapeHtml(content);
+        contentDiv.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+        if (role !== 'user') addCodeCopyButtons(contentDiv);
     }
 
     const tbContainer = document.createElement('div');
@@ -518,7 +565,8 @@ function updateMessage(msgEl, content, isError = false) {
     if (contentEl) {
         contentEl.innerHTML = isError
             ? `<span class="message-error">${escapeHtml(content)}</span>`
-            : escapeHtml(content);
+            : renderMarkdown(content);
+        if (!isError) addCodeCopyButtons(contentEl);
 
         if (isError) {
             msgEl.classList.add('chat-message-error');
@@ -866,6 +914,12 @@ function setupStreamEventListeners() {
         isWaitingForResponse = false;
         activeStreamId = null;
         activeStreamElement = null;
+
+        // Restore Send button, hide Stop button
+        const sendEl = document.getElementById('chat-send');
+        const stopEl = document.getElementById('chat-stop');
+        if (sendEl) sendEl.style.display = '';
+        if (stopEl) stopEl.style.display = 'none';
     });
 }
 
@@ -907,7 +961,7 @@ function updateStreamingContent(msgEl, content) {
     const contentEl = msgEl.querySelector('.message-content');
     if (contentEl) {
         // Replace loading indicator with streamed content
-        contentEl.innerHTML = escapeHtml(content);
+        contentEl.innerHTML = renderMarkdown(content);
     }
 
     // Scroll to bottom

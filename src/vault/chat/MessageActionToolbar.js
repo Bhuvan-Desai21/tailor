@@ -282,6 +282,18 @@ function createActionButton(action, message, context) {
             e.stopPropagation();
             await showDropdown(btn, action, message, context);
         });
+    } else if (action.type === 'toggle') {
+        // Toggle button — tracks on/off state
+        btn.classList.add('toggle-action');
+        if (action.active) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            action.active = !action.active;
+            btn.classList.toggle('active', action.active);
+            if (action.handler) {
+                action.handler(message, action.active, context);
+            }
+        });
     } else {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();

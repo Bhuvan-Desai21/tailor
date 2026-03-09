@@ -49,3 +49,4 @@ htmlcov/
 
 # Git worktrees
 .worktrees/
+.agent

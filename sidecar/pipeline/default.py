@@ -178,7 +178,12 @@ class DefaultPipeline:
         messages.append({"role": "system", "content": system_prompt})
 
         for msg in history or []:
-            messages.append(msg)
+            # Filter out extra keys like 'id' or 'timestamp' that some providers (e.g. Groq) reject
+            clean_msg = {
+                "role": msg.get("role", "user"),
+                "content": msg.get("content", ""),
+            }
+            messages.append(clean_msg)
 
         messages.append({"role": "user", "content": message})
 
@@ -187,12 +192,18 @@ class DefaultPipeline:
         model = meta.get("model")
         category = meta.get("category", self.config.category)
 
+        # Build extra kwargs for LLM (e.g., web search)
+        llm_kwargs = {}
+        if meta.get("web_search"):
+            llm_kwargs["web_search_options"] = {"search_context_size": "medium"}
+
         try:
             async for token in await self.llm_service.complete(
                 messages=messages,
                 category=category,
                 model=model,  # Pass specific model if provided
                 stream=True,
+                **llm_kwargs,
             ):
                 yield token
         except Exception as e:
