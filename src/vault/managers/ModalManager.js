@@ -83,7 +83,12 @@ export class ModalManager {
         const contentEl = document.getElementById('modal-content');
 
         titleEl.textContent = title;
-        contentEl.innerHTML = html;
+        contentEl.innerHTML = '';
+        if (html instanceof HTMLElement) {
+            contentEl.appendChild(html);
+        } else {
+            contentEl.innerHTML = html;
+        }
         modal.style.width = width;
         if (height) {
             modal.style.height = height;
